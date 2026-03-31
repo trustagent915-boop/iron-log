@@ -58,6 +58,58 @@ export interface WorkoutExerciseLog {
   performedOrder: number;
 }
 
+export interface ImportRun {
+  id: string;
+  fileName: string;
+  sheetName: string;
+  totalRows: number;
+  importedRows: number;
+  skippedRows: number;
+  warnings: string[];
+  createdAt: string;
+}
+
+export interface ColumnMapping {
+  date: string | null;
+  day: string | null;
+  week: string | null;
+  exercise: string | null;
+  sets: string | null;
+  reps: string | null;
+  weight: string | null;
+  notes: string | null;
+}
+
+export interface ParsedRow {
+  date: string | null;
+  day: string | null;
+  week: number | null;
+  exercise: string | null;
+  sets: number | null;
+  reps: number | null;
+  weight: number | null;
+  notes: string | null;
+  rowIndex: number;
+  warnings: string[];
+  valid: boolean;
+}
+
+export interface ParsedSheetResult {
+  headers: string[];
+  rows: ParsedRow[];
+  previewRows: ParsedRow[];
+  warnings: string[];
+  totalRows: number;
+  importedRows: number;
+  skippedRows: number;
+}
+
+export interface MappingCompleteness {
+  missingRequired: Array<"exercise" | "date_or_day">;
+  mappedCount: number;
+  totalCount: number;
+}
+
 export interface ArmTrackerData {
   plans: Plan[];
   sessions: PlanSession[];
@@ -65,6 +117,51 @@ export interface ArmTrackerData {
   workoutLogs: WorkoutLog[];
   exerciseLogs: WorkoutExerciseLog[];
   importRuns: ImportRun[];
+}
+
+export interface ArmTrackerDataCounts {
+  plans: number;
+  sessions: number;
+  exercises: number;
+  workoutLogs: number;
+  exerciseLogs: number;
+  importRuns: number;
+}
+
+export interface ArmTrackerArchive {
+  app: "iron-log";
+  schemaVersion: number;
+  exportedAt: string;
+  data: ArmTrackerData;
+}
+
+export interface ArmTrackerArchiveExport {
+  fileName: string;
+  payload: string;
+  exportedAt: string;
+  counts: ArmTrackerDataCounts;
+}
+
+export interface ArmTrackerArchiveImportResult {
+  exportedAt: string | null;
+  counts: ArmTrackerDataCounts;
+  added: ArmTrackerDataCounts;
+}
+
+export interface SessionWithExercises extends PlanSession {
+  exercises: PlanExercise[];
+}
+
+export interface WorkoutLogWithExercises extends WorkoutLog {
+  exerciseLogs: WorkoutExerciseLog[];
+}
+
+export interface SessionDetails {
+  session: PlanSession;
+  plan: Plan | null;
+  exercises: PlanExercise[];
+  workoutLog: WorkoutLog | null;
+  exerciseLogs: WorkoutExerciseLog[];
 }
 
 export interface ImportPlanInput {
@@ -75,16 +172,48 @@ export interface ImportPlanInput {
   totalRows: number;
 }
 
+export interface ImportPlanResult {
+  plan: Plan;
+  sessions: PlanSession[];
+  exercises: PlanExercise[];
+  importRun: ImportRun;
+  warnings: string[];
+  importedRows: number;
+  skippedRows: number;
+}
+
+export interface CreateCustomSessionExerciseInput {
+  exerciseName: string;
+  plannedSets: number | null;
+  plannedReps: number | null;
+  plannedWeight: number | null;
+  plannedNotes: string | null;
+}
+
 export interface CreateCustomSessionInput {
   sessionDate: string;
   title: string | null;
   notes: string | null;
-  exercises: Array<{ exerciseName: string; plannedSets: number|null; plannedReps: number|null; plannedWeight: number|null; plannedNotes: string|null }>;
+  exercises: CreateCustomSessionExerciseInput[];
+}
+
+export interface CreateCustomSessionResult {
+  session: PlanSession;
+  exercises: PlanExercise[];
+}
+
+export interface WorkoutExerciseInput {
+  planExerciseId: string;
+  actualWeight: number | null;
+  actualReps: number | null;
+  actualSets: number | null;
+  notes: string | null;
+  skipped: boolean;
 }
 
 export interface SaveWorkoutLogInput {
   sessionId: string;
   performedDate: string;
   overallNotes: string | null;
-  exercises: Array<{ planExerciseId: string; actualWeight: number|null; actualReps: number|null; actualSets: number|null; notes: string|null; skipped: boolean }>;
+  exercises: WorkoutExerciseInput[];
 }

@@ -12,7 +12,11 @@ interface ErrorBoundaryWrapperProps {
 
 export function ErrorBoundaryWrapper({ error, reset }: ErrorBoundaryWrapperProps) {
   useEffect(() => {
+    // Log to error monitoring service
     console.error('Iron Log Error Boundary:', error);
+
+    // In production: send to Sentry/DataDog
+    // captureException(error);
   }, [error]);
 
   return (
@@ -25,9 +29,27 @@ export function ErrorBoundaryWrapper({ error, reset }: ErrorBoundaryWrapperProps
             <p className="mt-2 text-sm text-red-800 leading-relaxed">
               {error.message || 'Si è verificato un errore imprevisto. Prova a ricaricare la pagina.'}
             </p>
+            {process.env.NODE_ENV === 'development' && (
+              <details className="mt-3 text-xs text-red-700">
+                <summary className="cursor-pointer">Dettagli errore</summary>
+                <pre className="mt-2 p-2 bg-red-100 rounded overflow-auto">
+                  {error.stack}
+                </pre>
+              </details>
+            )}
             <div className="mt-4 flex gap-2">
-              <Button onClick={reset} className="bg-red-600 hover:bg-red-700 text-white">Riprova</Button>
-              <Button variant="outline" onClick={() => window.location.href = '/'}>Torna alla home</Button>
+              <Button
+                onClick={reset}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                Riprova
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => window.location.href = '/'}
+              >
+                Torna alla home
+              </Button>
             </div>
           </div>
         </CardContent>

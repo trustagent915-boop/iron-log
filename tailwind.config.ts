@@ -38,7 +38,8 @@ const config: Config = {
         "3xl": "1.5rem"
       },
       fontFamily: {
-        sans: }
+        sans: ["Segoe UI", "Roboto", "Helvetica Neue", "Arial", "sans-serif"]
+      }
     }
   },
   plugins: []
