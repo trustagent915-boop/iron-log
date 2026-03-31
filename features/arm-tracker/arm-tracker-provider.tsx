@@ -1,6 +1,13 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode
+} from "react";
 
 import { createCustomSession, importParsedPlan, saveWorkoutLogEntry } from "@/lib/arm-tracker/mutations";
 import { readWorkbook } from "@/lib/arm-tracker/excel-parser";
@@ -9,12 +16,15 @@ import {
   createIronLogHistorySeedData,
   IRON_LOG_HISTORY_SEED_VERSION
 } from "@/lib/arm-tracker/iron-log-history-seed";
+import { fetchRemoteSnapshot, pushRemoteSnapshot } from "@/lib/arm-tracker/remote-sync";
 import { getActivePlan, getSessionDetails } from "@/lib/arm-tracker/selectors";
 import {
   ARM_TRACKER_STORAGE_EVENT,
   createEmptyArmTrackerData,
   db,
   exportArmTrackerArchive,
+  getDataCounts,
+  hasStoredArmTrackerData,
   importArmTrackerArchive,
   importArmTrackerSnapshot
 } from "@/lib/arm-tracker/storage";
@@ -48,13 +58,11 @@ const ArmTrackerContext = createContext<ArmTrackerContextValue | null>(null);
 export function ArmTrackerProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<ArmTrackerData>(createEmptyArmTrackerData());
   const [isReady, setIsReady] = useState(false);
+  const syncEnabledRef = useRef(true);
+  const syncInitializedRef = useRef(false);
+  const lastSyncedPayloadRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    function syncFromStorage() {
-      setData(db.getSnapshot());
-      setIsReady(true);
-    }
-
+  function applySeedIfNeeded() {
     const snapshot = db.getSnapshot();
     const hasUserData = db.hasUserData(snapshot);
     const hasCurrentSeed = db.getSeedVersion() === IRON_LOG_HISTORY_SEED_VERSION;
@@ -62,11 +70,25 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
     if (!hasCurrentSeed && !hasUserData) {
       db.setSnapshot(createIronLogHistorySeedData());
       db.setSeedVersion(IRON_LOG_HISTORY_SEED_VERSION);
-    } else if (!hasCurrentSeed && hasUserData) {
-      importArmTrackerSnapshot(createIronLogHistorySeedData());
-      db.setSeedVersion(IRON_LOG_HISTORY_SEED_VERSION);
+      return db.getSnapshot();
     }
 
+    if (!hasCurrentSeed && hasUserData) {
+      importArmTrackerSnapshot(createIronLogHistorySeedData());
+      db.setSeedVersion(IRON_LOG_HISTORY_SEED_VERSION);
+      return db.getSnapshot();
+    }
+
+    return snapshot;
+  }
+
+  useEffect(() => {
+    function syncFromStorage() {
+      setData(db.getSnapshot());
+      setIsReady(true);
+    }
+
+    const localSnapshot = applySeedIfNeeded();
     syncFromStorage();
 
     function handleStorageSync() {
@@ -76,11 +98,100 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
     window.addEventListener(ARM_TRACKER_STORAGE_EVENT, handleStorageSync);
     window.addEventListener("storage", handleStorageSync);
 
+    const abortController = new AbortController();
+
+    async function reconcileRemoteSnapshot() {
+      try {
+        const remote = await fetchRemoteSnapshot(abortController.signal);
+
+        if (!remote.configured) {
+          syncEnabledRef.current = false;
+          syncInitializedRef.current = true;
+          return;
+        }
+
+        const localCounts = getDataCounts(localSnapshot);
+        const remoteCounts = remote.snapshot ? getDataCounts(remote.snapshot) : null;
+        const localHasData = hasStoredArmTrackerData(localSnapshot);
+        const remoteHasData = remote.snapshot ? hasStoredArmTrackerData(remote.snapshot) : false;
+        const remoteLooksRicher =
+          remoteCounts !== null &&
+          Object.values(remoteCounts).reduce((sum, value) => sum + value, 0) >
+            Object.values(localCounts).reduce((sum, value) => sum + value, 0);
+
+        if (remoteHasData && (!localHasData || remoteLooksRicher)) {
+          lastSyncedPayloadRef.current = JSON.stringify(remote.snapshot);
+          db.setSnapshot(remote.snapshot!);
+
+          if (remote.seedVersion?.trim()) {
+            db.setSeedVersion(remote.seedVersion);
+          }
+        } else if (localHasData) {
+          const pushed = await pushRemoteSnapshot({
+            snapshot: localSnapshot,
+            seedVersion: db.getSeedVersion(),
+            signal: abortController.signal
+          });
+
+          if (pushed.configured) {
+            lastSyncedPayloadRef.current = JSON.stringify(localSnapshot);
+          } else {
+            syncEnabledRef.current = false;
+          }
+        }
+      } catch {
+        syncEnabledRef.current = false;
+      } finally {
+        syncInitializedRef.current = true;
+        syncFromStorage();
+      }
+    }
+
+    void reconcileRemoteSnapshot();
+
     return () => {
+      abortController.abort();
       window.removeEventListener(ARM_TRACKER_STORAGE_EVENT, handleStorageSync);
       window.removeEventListener("storage", handleStorageSync);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isReady || !syncInitializedRef.current || !syncEnabledRef.current) {
+      return;
+    }
+
+    const payload = JSON.stringify(data);
+
+    if (payload === lastSyncedPayloadRef.current) {
+      return;
+    }
+
+    const abortController = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        const result = await pushRemoteSnapshot({
+          snapshot: data,
+          seedVersion: db.getSeedVersion(),
+          signal: abortController.signal
+        });
+
+        if (!result.configured) {
+          syncEnabledRef.current = false;
+          return;
+        }
+
+        lastSyncedPayloadRef.current = payload;
+      } catch {
+        syncEnabledRef.current = false;
+      }
+    }, 400);
+
+    return () => {
+      abortController.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [data, isReady]);
 
   function refresh() {
     setData(db.getSnapshot());
