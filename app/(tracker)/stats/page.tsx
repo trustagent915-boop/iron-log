@@ -3,7 +3,7 @@
 import { Activity, Award, CalendarRange, Download, Gauge, TrendingUp, Zap } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { startTransition, useDeferredValue, useEffect, useMemo, useState } from "react";
+import { startTransition, useDeferredValue, useEffect, useState } from "react";
 import {
   Area,
   AreaChart,
@@ -30,7 +30,6 @@ import { Select } from "@/components/ui/select";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
 import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { exportStatsToCSV } from "@/lib/arm-tracker/export";
-import { memoizedSelectors } from "@/lib/arm-tracker/selectors-memoized";
 import { safeParseYear, safeParseExercise } from "@/lib/url-safe";
 import {
   buildExerciseLeaderboard,
@@ -229,58 +228,14 @@ export default function StatsPage() {
     }
   }, [exerciseOptions, selectedExercise, selectedYear]);
 
-  if (!isReady) {
-    return <LoadingPanel message="Preparazione statistiche storiche..." />;
-  }
-
-  if (!hasLogs) {
-    return (
-      <div className="page-enter space-y-8">
-        <PageHeader
-          eyebrow="Statistiche"
-          title="Statistiche in attesa di storico"
-          description="Appena importi un workbook storico o salvi i primi allenamenti, qui compaiono trend, pattern e progressione per esercizio."
-        />
-        <Card>
-          <CardContent className="flex flex-col gap-4 p-6 pt-6 sm:flex-row sm:items-center sm:justify-between sm:p-7 sm:pt-7">
-            <p className="text-sm leading-7 text-muted-foreground">
-              Questa vista si accende quando lo storico contiene almeno un workout registrato.
-            </p>
-            <Button asChild>
-              <Link href={"/import" as Route}>Importa storico</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  const monthlyData = useMemo(
-    () => memoizedSelectors.buildMonthlyHistoryData(scopedData),
-    [scopedData]
-  );
-  const yearlyData = useMemo(
-    () => memoizedSelectors.buildYearlyVolumeData(data),
-    [data]
-  );
-  const weekdayData = useMemo(
-    () => memoizedSelectors.buildWeekdayPatternData(scopedData),
-    [scopedData]
-  );
-  const leaderboard = useMemo(
-    () => memoizedSelectors.buildExerciseLeaderboard(scopedData),
-    [scopedData]
-  );
-  const statusData = useMemo(
-    () => memoizedSelectors.buildStatusDistributionData(scopedData),
-    [scopedData]
-  );
-  const exerciseTrend = useMemo(
-    () => deferredSelectedExercise
-      ? memoizedSelectors.buildExerciseTrend(scopedData, deferredSelectedExercise)
-      : [],
-    [deferredSelectedExercise, scopedData]
-  );
+  const monthlyData = buildMonthlyHistoryData(scopedData);
+  const yearlyData = buildYearlyVolumeData(data);
+  const weekdayData = buildWeekdayPatternData(scopedData);
+  const leaderboard = buildExerciseLeaderboard(scopedData);
+  const statusData = buildStatusDistributionData(scopedData);
+  const exerciseTrend = deferredSelectedExercise
+    ? buildExerciseTrend(scopedData, deferredSelectedExercise)
+    : [];
   const gamification = getGamificationSummary(scopedData);
   const historyRange = getHistoryDateRange(data);
   const lastWorkoutDate = getLastWorkoutDate(scopedData);
@@ -333,6 +288,32 @@ export default function StatsPage() {
           ? entry.workoutCount
           : (entry.adherence ?? 0)
   }));
+
+  if (!isReady) {
+    return <LoadingPanel message="Preparazione statistiche storiche..." />;
+  }
+
+  if (!hasLogs) {
+    return (
+      <div className="page-enter space-y-8">
+        <PageHeader
+          eyebrow="Statistiche"
+          title="Statistiche in attesa di storico"
+          description="Appena importi un workbook storico o salvi i primi allenamenti, qui compaiono trend, pattern e progressione per esercizio."
+        />
+        <Card>
+          <CardContent className="flex flex-col gap-4 p-6 pt-6 sm:flex-row sm:items-center sm:justify-between sm:p-7 sm:pt-7">
+            <p className="text-sm leading-7 text-muted-foreground">
+              Questa vista si accende quando lo storico contiene almeno un workout registrato.
+            </p>
+            <Button asChild>
+              <Link href={"/import" as Route}>Importa storico</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="page-enter space-y-8">

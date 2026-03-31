@@ -13,3 +13,5 @@ storage/uploads/*
 storage/mock-db.json
 !.gitkeep
 npm-debug.log*
+
+.vercel
