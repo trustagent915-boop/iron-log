@@ -1078,7 +1078,7 @@ export default function DashboardPage() {
                     </p>
                   </div>
                 ) : null}
-                <div className="max-h-[620px] space-y-3 overflow-y-auto pr-1">
+                <div className="space-y-3">
                   {level100RankedExercises.map((exercise, index) => {
                     const isSelected = exercise.exerciseName === selectedLevel100Exercise?.exerciseName;
 
@@ -1263,7 +1263,7 @@ export default function DashboardPage() {
                     </p>
                   </div>
                 ) : null}
-                <div className="max-h-[620px] space-y-3 overflow-y-auto pr-1">
+                <div className="space-y-3">
                   {level100RankedExercises.map((exercise, index) => {
                     const isSelected = exercise.exerciseName === selectedLevel100Exercise?.exerciseName;
 
