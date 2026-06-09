@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -45,7 +45,10 @@ export default function LogWorkoutPage() {
   const [isSaving, setIsSaving] = useState(false);
 
   const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
-  const details = sessionId ? findSessionDetails(sessionId) : null;
+  const details = useMemo(
+    () => (sessionId ? findSessionDetails(sessionId) : null),
+    [findSessionDetails, sessionId]
+  );
 
   useEffect(() => {
     const currentDetails = details;

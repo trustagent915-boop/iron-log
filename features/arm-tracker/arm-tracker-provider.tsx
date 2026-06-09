@@ -10,6 +10,7 @@ import {
 } from "react";
 
 import { createCustomSession, importParsedPlan, saveWorkoutLogEntry } from "@/lib/arm-tracker/mutations";
+import { applyCompetitionPrepProgram } from "@/lib/arm-tracker/competition-prep-program";
 import { readWorkbook } from "@/lib/arm-tracker/excel-parser";
 import { parseHistoricalWorkbook } from "@/lib/arm-tracker/historical-workbook";
 import {
@@ -82,13 +83,23 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
     return snapshot;
   }
 
+  function applyLocalMigrations(snapshot: ArmTrackerData) {
+    const migratedSnapshot = applyCompetitionPrepProgram(snapshot);
+
+    if (migratedSnapshot !== snapshot) {
+      db.setSnapshot(migratedSnapshot);
+    }
+
+    return migratedSnapshot;
+  }
+
   useEffect(() => {
     function syncFromStorage() {
-      setData(db.getSnapshot());
+      setData(applyLocalMigrations(db.getSnapshot()));
       setIsReady(true);
     }
 
-    const localSnapshot = applySeedIfNeeded();
+    const localSnapshot = applyLocalMigrations(applySeedIfNeeded());
     syncFromStorage();
 
     function handleStorageSync() {

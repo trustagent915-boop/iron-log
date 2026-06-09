@@ -9,6 +9,7 @@ import {
   getLevel100Score
 } from "../lib/arm-tracker/level-100.ts";
 import type { ArmTrackerData } from "../lib/arm-tracker/types.ts";
+import { applyCompetitionPrepProgram } from "../lib/arm-tracker/competition-prep-program.ts";
 
 function createData(): ArmTrackerData {
   return {
@@ -390,4 +391,36 @@ test("classifies suggested untracked cases without forcing them into classic kg 
   assert.equal(getLevel100ExerciseRule("Muscle Up").label, "Skill dinamiche");
   assert.equal(getLevel100ExerciseRule("Fran").label, "Conditioning");
   assert.equal(getLevel100ExerciseRule("Lat Machine").label, "Macchine / cavi");
+});
+
+test("adds six planned competition prep workouts without duplicating them", () => {
+  const migrated = applyCompetitionPrepProgram(createData());
+  const migratedAgain = applyCompetitionPrepProgram(migrated);
+  const prepSessions = migrated.sessions.filter((session) =>
+    session.id.startsWith("competition-prep-armwrestling-2026-06-session-")
+  );
+  const prepExercises = migrated.exercises.filter((exercise) =>
+    exercise.sessionId.startsWith("competition-prep-armwrestling-2026-06-session-")
+  );
+
+  assert.equal(prepSessions.length, 6);
+  assert.equal(migratedAgain.sessions.length, migrated.sessions.length);
+  assert.equal(prepSessions[0]?.sessionDate, "2026-06-09");
+  assert.equal(prepSessions.at(-1)?.sessionDate, "2026-06-26");
+  assert.ok(prepSessions.every((session) => session.status === "planned"));
+  assert.ok(prepSessions.every((session) => session.kind === "custom"));
+  assert.ok(
+    prepExercises
+      .map((exercise) => exercise.plannedWeight)
+      .filter((weight): weight is number => weight !== null)
+      .every((weight) => weight % 5 === 0)
+  );
+  assert.ok(
+    prepExercises.some(
+      (exercise) =>
+        exercise.sessionId === "competition-prep-armwrestling-2026-06-session-4" &&
+        exercise.exerciseName === "Pull Up zavorrato" &&
+        exercise.plannedWeight === 65
+    )
+  );
 });
