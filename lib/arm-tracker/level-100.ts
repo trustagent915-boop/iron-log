@@ -135,6 +135,20 @@ const maxReasonableRecordWeight = 500;
 const maxLevel100Score = 130;
 const defaultBodyweightKg = 90;
 
+export const LEVEL_100_ARMWRESTLING_BASE_EXERCISES = [
+  "Side Pressure",
+  "Back Pressure",
+  "Cupping",
+  "Pronation",
+  "Supination",
+  "Wrist Curl"
+] as const;
+
+const level100ArmwrestlingSidedExercises = LEVEL_100_ARMWRESTLING_BASE_EXERCISES.flatMap((exerciseName) => [
+  `${exerciseName} Destro`,
+  `${exerciseName} Sinistro`
+]);
+
 export const LEVEL_100_TARGET_EXERCISES = [
   "Squat",
   "Stacco da terra",
@@ -146,12 +160,7 @@ export const LEVEL_100_TARGET_EXERCISES = [
   "Pull Up",
   "One Arm Pull Up",
   "One Arm Pull Up Iso",
-  "Side Pressure",
-  "Back Pressure",
-  "Cupping",
-  "Pronation",
-  "Supination",
-  "Wrist Curl",
+  ...level100ArmwrestlingSidedExercises,
   "Front Lever",
   "Back Lever",
   "Planche",
@@ -178,6 +187,26 @@ function getBodyweight(value: number | null | undefined) {
 
 function getExternalWeight(value: number | null) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+function getArmwrestlingSideLabel(normalizedName: string) {
+  const tokens = new Set(normalizedName.split(" "));
+
+  if (tokens.has("destro") || tokens.has("destra") || tokens.has("dx") || tokens.has("right")) {
+    return "Destro";
+  }
+
+  if (tokens.has("sinistro") || tokens.has("sinistra") || tokens.has("sx") || tokens.has("left")) {
+    return "Sinistro";
+  }
+
+  return null;
+}
+
+function formatArmwrestlingExerciseName(baseName: string, normalizedName: string) {
+  const sideLabel = getArmwrestlingSideLabel(normalizedName);
+
+  return sideLabel ? `${baseName} ${sideLabel}` : baseName;
 }
 
 export function canonicalizeLevel100ExerciseName(rawName: string) {
@@ -235,27 +264,27 @@ export function canonicalizeLevel100ExerciseName(rawName: string) {
   }
 
   if (includesAny(normalized, ["side pressure"])) {
-    return "Side Pressure";
+    return formatArmwrestlingExerciseName("Side Pressure", normalized);
   }
 
   if (includesAny(normalized, ["back pressure"])) {
-    return "Back Pressure";
+    return formatArmwrestlingExerciseName("Back Pressure", normalized);
   }
 
   if (includesAny(normalized, ["cupping"])) {
-    return "Cupping";
+    return formatArmwrestlingExerciseName("Cupping", normalized);
   }
 
   if (includesAny(normalized, ["pronation", "pronazione"])) {
-    return "Pronation";
+    return formatArmwrestlingExerciseName("Pronation", normalized);
   }
 
   if (includesAny(normalized, ["supination", "supinazione"])) {
-    return "Supination";
+    return formatArmwrestlingExerciseName("Supination", normalized);
   }
 
   if (includesAny(normalized, ["wrist curl", "wrist roller", "front wrist"])) {
-    return "Wrist Curl";
+    return formatArmwrestlingExerciseName("Wrist Curl", normalized);
   }
 
   if (includesAny(normalized, ["front lever"])) {

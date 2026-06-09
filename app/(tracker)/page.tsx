@@ -28,6 +28,7 @@ import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { StatusBadge } from "@/features/arm-tracker/status-badge";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
 import {
+  LEVEL_100_ARMWRESTLING_BASE_EXERCISES,
   LEVEL_100_TARGET_EXERCISES,
   buildLevel100Dashboard,
   canonicalizeLevel100ExerciseName,
@@ -51,7 +52,9 @@ import {
 const level100WatchlistStorageKey = "iron_log_level_100_watchlist";
 const level100ManualRecordsStorageKey = "iron_log_level_100_manual_records";
 const level100WatchlistMigrationStorageKey = "iron_log_level_100_watchlist_isometries_v1";
+const level100ArmwrestlingSidesMigrationStorageKey = "iron_log_level_100_armwrestling_sides_v1";
 const level100DefaultIsometryExercises = ["Back Lever", "L-Sit", "Handstand Hold"] as const;
+const level100ArmwrestlingBaseExerciseSet = new Set<string>(LEVEL_100_ARMWRESTLING_BASE_EXERCISES);
 
 interface Level100ManualRecord {
   exerciseName: string;
@@ -274,6 +277,18 @@ function dedupeWatchlist(names: readonly string[]) {
       seen.add(key);
       return true;
     });
+}
+
+function expandArmwrestlingWatchlistSides(names: readonly string[]) {
+  return names.flatMap((rawName) => {
+    const exerciseName = normalizeWatchlistName(rawName);
+
+    if (!level100ArmwrestlingBaseExerciseSet.has(exerciseName)) {
+      return [exerciseName];
+    }
+
+    return [`${exerciseName} Destro`, `${exerciseName} Sinistro`];
+  });
 }
 
 function Level100CompactRow({
@@ -650,8 +665,12 @@ export default function DashboardPage() {
       const parsedValue = JSON.parse(storedValue);
 
       if (Array.isArray(parsedValue)) {
-        const storedNames = parsedValue.filter((name): name is string => typeof name === "string");
+        const rawStoredNames = parsedValue.filter((name): name is string => typeof name === "string");
         const shouldAddIsometryDefaults = !window.localStorage.getItem(level100WatchlistMigrationStorageKey);
+        const shouldExpandArmwrestlingSides = !window.localStorage.getItem(level100ArmwrestlingSidesMigrationStorageKey);
+        const storedNames = shouldExpandArmwrestlingSides
+          ? expandArmwrestlingWatchlistSides(rawStoredNames)
+          : rawStoredNames;
         const nextWatchlist = dedupeWatchlist(
           shouldAddIsometryDefaults ? [...storedNames, ...level100DefaultIsometryExercises] : storedNames
         );
@@ -663,6 +682,10 @@ export default function DashboardPage() {
 
         if (shouldAddIsometryDefaults) {
           window.localStorage.setItem(level100WatchlistMigrationStorageKey, "done");
+        }
+
+        if (shouldExpandArmwrestlingSides) {
+          window.localStorage.setItem(level100ArmwrestlingSidesMigrationStorageKey, "done");
         }
       }
     } catch {

@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   LEVEL_100_TARGET_EXERCISES,
   buildLevel100Dashboard,
+  canonicalizeLevel100ExerciseName,
   getLevel100ExerciseRule,
   getLevel100Score
 } from "../lib/arm-tracker/level-100.ts";
@@ -32,7 +33,65 @@ test("scores classic two-arm exercises with weight as level", () => {
 
 test("scores arm wrestling arm exercises with doubled weight", () => {
   assert.equal(getLevel100Score({ exerciseName: "Side Pressure", weight: 30 }), 60);
+  assert.equal(getLevel100Score({ exerciseName: "Side Pressure Destro", weight: 30 }), 60);
+  assert.equal(getLevel100Score({ exerciseName: "Side Pressure Sinistro", weight: 25 }), 50);
   assert.equal(getLevel100Score({ exerciseName: "Cupping", weight: 35 }), 70);
+});
+
+test("keeps right and left armwrestling records separated", () => {
+  const data = createData();
+
+  data.workoutLogs = [
+    {
+      id: "log-1",
+      planSessionId: "session-1",
+      performedDate: "2026-03-01",
+      overallNotes: null,
+      completionStatus: "completed",
+      createdAt: "2026-03-01T10:00:00.000Z"
+    }
+  ];
+  data.exerciseLogs = [
+    {
+      id: "exercise-log-1",
+      workoutLogId: "log-1",
+      planExerciseId: "exercise-1",
+      exerciseNameSnapshot: "Side Pressure dx",
+      plannedSetsSnapshot: null,
+      plannedRepsSnapshot: null,
+      plannedWeightSnapshot: null,
+      plannedNotesSnapshot: null,
+      actualWeight: 30,
+      actualReps: 3,
+      actualSets: 1,
+      notes: null,
+      performedOrder: 0
+    },
+    {
+      id: "exercise-log-2",
+      workoutLogId: "log-1",
+      planExerciseId: "exercise-2",
+      exerciseNameSnapshot: "Side Pressure sx",
+      plannedSetsSnapshot: null,
+      plannedRepsSnapshot: null,
+      plannedWeightSnapshot: null,
+      plannedNotesSnapshot: null,
+      actualWeight: 20,
+      actualReps: 3,
+      actualSets: 1,
+      notes: null,
+      performedOrder: 1
+    }
+  ];
+
+  const dashboard = buildLevel100Dashboard(data);
+  const right = dashboard.exercises.find((exercise) => exercise.exerciseName === "Side Pressure Destro");
+  const left = dashboard.exercises.find((exercise) => exercise.exerciseName === "Side Pressure Sinistro");
+
+  assert.equal(canonicalizeLevel100ExerciseName("Side Pressure braccio destro"), "Side Pressure Destro");
+  assert.equal(canonicalizeLevel100ExerciseName("Side Pressure braccio sinistro"), "Side Pressure Sinistro");
+  assert.equal(right?.level, 60);
+  assert.equal(left?.level, 40);
 });
 
 test("scores weighted bodyweight exercises with bodyweight plus ballast divided by two", () => {
@@ -312,6 +371,10 @@ test("pins target exercises so the dashboard always shows the main watchlist", (
   assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "Back Lever"));
   assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "L-Sit"));
   assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "Handstand Hold"));
+  assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "Side Pressure Destro"));
+  assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "Side Pressure Sinistro"));
+  assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "Back Pressure Destro"));
+  assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "Back Pressure Sinistro"));
 });
 
 test("classifies suggested untracked cases without forcing them into classic kg scoring", () => {
