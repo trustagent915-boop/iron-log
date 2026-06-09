@@ -309,10 +309,15 @@ test("pins target exercises so the dashboard always shows the main watchlist", (
   );
   assert.equal(dashboard.exercises[0]?.level, 0);
   assert.equal(dashboard.exercises[0]?.validRecordCount, 0);
+  assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "Back Lever"));
+  assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "L-Sit"));
+  assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "Handstand Hold"));
 });
 
 test("classifies suggested untracked cases without forcing them into classic kg scoring", () => {
-  assert.equal(getLevel100ExerciseRule("Front Lever").label, "Skill / isometrie");
+  assert.equal(getLevel100ExerciseRule("Front Lever").label, "Isometrie");
+  assert.equal(getLevel100ExerciseRule("One Arm Pull Up Iso").label, "Isometrie");
+  assert.equal(getLevel100ExerciseRule("L-Sit").label, "Isometrie");
   assert.equal(getLevel100ExerciseRule("Muscle Up").label, "Skill dinamiche");
   assert.equal(getLevel100ExerciseRule("Fran").label, "Conditioning");
   assert.equal(getLevel100ExerciseRule("Lat Machine").label, "Macchine / cavi");

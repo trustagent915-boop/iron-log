@@ -97,13 +97,13 @@ const level100Rules: Record<Level100RuleId, Level100Rule> = {
   },
   one_arm_isometry: {
     id: "one_arm_isometry",
-    label: "One Arm Iso",
+    label: "Isometrie",
     formulaLabel: "peso + zavorra",
     description: "Isometria One Arm valida solo a 10 secondi: livello = peso corporeo + zavorra."
   },
   isometric_skill: {
     id: "isometric_skill",
-    label: "Skill / isometrie",
+    label: "Isometrie",
     formulaLabel: "secondi x coefficiente",
     description: "Front lever, back lever, planche, handstand hold, L-sit: serve tracciare i secondi.",
     needsDedicatedMetric: true
@@ -153,7 +153,10 @@ export const LEVEL_100_TARGET_EXERCISES = [
   "Supination",
   "Wrist Curl",
   "Front Lever",
-  "Planche"
+  "Back Lever",
+  "Planche",
+  "L-Sit",
+  "Handstand Hold"
 ] as const;
 
 function normalizeExerciseKey(value: string) {
@@ -269,6 +272,10 @@ export function canonicalizeLevel100ExerciseName(rawName: string) {
 
   if (includesAny(normalized, ["handstand hold", "verticale"])) {
     return "Handstand Hold";
+  }
+
+  if (includesAny(normalized, ["l sit", "lsit"])) {
+    return "L-Sit";
   }
 
   if (includesAny(normalized, ["muscle up", "mu anelli"])) {
@@ -435,7 +442,7 @@ export function buildLevel100Dashboard(
 ): Level100Dashboard {
   const options =
     typeof optionsOrLimit === "number" ? { limit: optionsOrLimit } : optionsOrLimit;
-  const limit = options.limit ?? 18;
+  const limit = Math.max(options.limit ?? 18, options.pinnedExerciseNames?.length ?? 0);
   const bodyweightKg = getBodyweight(options.bodyweightKg);
   const workoutLogMap = new Map(data.workoutLogs.map((workoutLog) => [workoutLog.id, workoutLog]));
   const buckets = new Map<

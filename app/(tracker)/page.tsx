@@ -50,6 +50,8 @@ import {
 
 const level100WatchlistStorageKey = "iron_log_level_100_watchlist";
 const level100ManualRecordsStorageKey = "iron_log_level_100_manual_records";
+const level100WatchlistMigrationStorageKey = "iron_log_level_100_watchlist_isometries_v1";
+const level100DefaultIsometryExercises = ["Back Lever", "L-Sit", "Handstand Hold"] as const;
 
 interface Level100ManualRecord {
   exerciseName: string;
@@ -60,12 +62,13 @@ interface Level100ManualRecord {
   date: string | null;
 }
 
-type Level100ClassFilter = "all" | "classic" | "calisthenics" | "armwrestling";
+type Level100ClassFilter = "all" | "classic" | "calisthenics" | "isometrics" | "armwrestling";
 
 const level100ClassFilters: Array<{ id: Level100ClassFilter; label: string }> = [
   { id: "all", label: "Tutti" },
   { id: "classic", label: "Classici" },
   { id: "calisthenics", label: "Calisthenics" },
+  { id: "isometrics", label: "Isometrie" },
   { id: "armwrestling", label: "Armwrestling" }
 ];
 
@@ -90,12 +93,14 @@ function formatRecordMeta(exercise: Level100Exercise) {
 }
 
 function getExerciseClassFilter(exercise: Level100Exercise): Exclude<Level100ClassFilter, "all"> {
+  if (exercise.rule.id === "one_arm_isometry" || exercise.rule.id === "isometric_skill") {
+    return "isometrics";
+  }
+
   if (
     exercise.rule.id === "weighted_bodyweight" ||
     exercise.rule.id === "bodyweight_reps" ||
     exercise.rule.id === "one_arm_pull_up" ||
-    exercise.rule.id === "one_arm_isometry" ||
-    exercise.rule.id === "isometric_skill" ||
     exercise.rule.id === "dynamic_skill"
   ) {
     return "calisthenics";
@@ -645,11 +650,19 @@ export default function DashboardPage() {
       const parsedValue = JSON.parse(storedValue);
 
       if (Array.isArray(parsedValue)) {
-        const nextWatchlist = dedupeWatchlist(parsedValue.filter((name): name is string => typeof name === "string"));
+        const storedNames = parsedValue.filter((name): name is string => typeof name === "string");
+        const shouldAddIsometryDefaults = !window.localStorage.getItem(level100WatchlistMigrationStorageKey);
+        const nextWatchlist = dedupeWatchlist(
+          shouldAddIsometryDefaults ? [...storedNames, ...level100DefaultIsometryExercises] : storedNames
+        );
 
         if (nextWatchlist.length) {
           setWatchlistNames(nextWatchlist);
           setSelectedExerciseName((currentName) => currentName ?? nextWatchlist[0] ?? null);
+        }
+
+        if (shouldAddIsometryDefaults) {
+          window.localStorage.setItem(level100WatchlistMigrationStorageKey, "done");
         }
       }
     } catch {
@@ -776,6 +789,7 @@ export default function DashboardPage() {
       all: 0,
       classic: 0,
       calisthenics: 0,
+      isometrics: 0,
       armwrestling: 0
     }
   );
@@ -887,6 +901,7 @@ export default function DashboardPage() {
                 <span className="data-chip">Classici: kg x 1</span>
                 <span className="data-chip">Braccia: kg x 2</span>
                 <span className="data-chip">Corpo libero: peso + zavorra</span>
+                <span className="data-chip">Isometrie: secondi / tenuta</span>
                 <span className="data-chip">Target 100 - Max 130</span>
               </div>
             </CardContent>
@@ -1075,6 +1090,7 @@ export default function DashboardPage() {
                 <span className="data-chip">Classici: kg x 1</span>
                 <span className="data-chip">Braccia: kg x 2</span>
                 <span className="data-chip">Corpo libero: peso + zavorra</span>
+                <span className="data-chip">Isometrie: secondi / tenuta</span>
                 <span className="data-chip">Target 100 - Max 130</span>
               </div>
 
