@@ -16,7 +16,7 @@ import {
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
+import { Select } from "@/components/ui/select";
 import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { StatusBadge } from "@/features/arm-tracker/status-badge";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
@@ -40,6 +41,7 @@ import {
   formatExercisePrescription,
   formatVolume,
   getCustomSessionsWithExercises,
+  getExerciseLibraryOptions,
   getGamificationSummary,
   getHistoryEntries,
   getLastWorkoutDate,
@@ -289,6 +291,65 @@ function expandArmwrestlingWatchlistSides(names: readonly string[]) {
 
     return [`${exerciseName} Destro`, `${exerciseName} Sinistro`];
   });
+}
+
+function Level100ExercisePicker({
+  value,
+  exerciseOptions,
+  onChange,
+  onAdd
+}: {
+  value: string;
+  exerciseOptions: string[];
+  onChange: (value: string) => void;
+  onAdd: () => void;
+}) {
+  const selectValue = exerciseOptions.includes(value) ? value : "";
+
+  return (
+    <div className="grid gap-2">
+      <div className="flex gap-2">
+        <Input
+          list="level-100-exercise-library"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onAdd();
+            }
+          }}
+          placeholder="Cerca o scrivi esercizio"
+          aria-label="Aggiungi esercizio Livello 100"
+        />
+        <Button
+          type="button"
+          className="h-12 w-12 shrink-0 px-0"
+          aria-label="Aggiungi esercizio"
+          onClick={onAdd}
+        >
+          <Plus className="h-4 w-4" />
+        </Button>
+      </div>
+      <Select
+        value={selectValue}
+        onChange={(event) => onChange(event.target.value)}
+        aria-label="Menu esercizi disponibili"
+      >
+        <option value="">Scegli dal menu esercizi disponibili</option>
+        {exerciseOptions.map((exerciseName) => (
+          <option key={exerciseName} value={exerciseName}>
+            {exerciseName}
+          </option>
+        ))}
+      </Select>
+      <datalist id="level-100-exercise-library">
+        {exerciseOptions.map((exerciseName) => (
+          <option key={exerciseName} value={exerciseName} />
+        ))}
+      </datalist>
+    </div>
+  );
 }
 
 function Level100CompactRow({
@@ -652,6 +713,15 @@ export default function DashboardPage() {
   const [watchlistLoaded, setWatchlistLoaded] = useState(false);
   const [manualRecords, setManualRecords] = useState<Record<string, Level100ManualRecord>>({});
   const [manualRecordsLoaded, setManualRecordsLoaded] = useState(false);
+  const availableLevel100ExerciseOptions = useMemo(
+    () =>
+      dedupeWatchlist([
+        ...LEVEL_100_TARGET_EXERCISES,
+        ...getExerciseLibraryOptions(data),
+        ...watchlistNames
+      ]).sort((left, right) => left.localeCompare(right, "it")),
+    [data, watchlistNames]
+  );
 
   useEffect(() => {
     try {
@@ -932,28 +1002,12 @@ export default function DashboardPage() {
             <div className="panel-divider order-first bg-white/[0.03] p-6 sm:p-8 xl:order-none xl:border-l xl:border-t-0">
               <div className="space-y-4">
                 <p className="eyebrow">Esercizi principali</p>
-                <div className="flex gap-2">
-                  <Input
-                    value={newExerciseName}
-                    onChange={(event) => setNewExerciseName(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        addWatchlistExercise();
-                      }
-                    }}
-                    placeholder="Aggiungi esercizio"
-                    aria-label="Aggiungi esercizio Livello 100"
-                  />
-                  <Button
-                    type="button"
-                    className="h-12 w-12 shrink-0 px-0"
-                    aria-label="Aggiungi esercizio"
-                    onClick={addWatchlistExercise}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
+                <Level100ExercisePicker
+                  value={newExerciseName}
+                  exerciseOptions={availableLevel100ExerciseOptions}
+                  onChange={setNewExerciseName}
+                  onAdd={addWatchlistExercise}
+                />
                 <div className="flex flex-wrap gap-2">
                   {level100ClassFilters.map((filter) => (
                     <Button
@@ -1133,28 +1187,12 @@ export default function DashboardPage() {
             <div className="panel-divider bg-white/[0.03] p-6 sm:p-8 xl:border-l xl:border-t-0">
               <div className="space-y-4">
                 <p className="eyebrow">Esercizi principali</p>
-                <div className="flex gap-2">
-                  <Input
-                    value={newExerciseName}
-                    onChange={(event) => setNewExerciseName(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        addWatchlistExercise();
-                      }
-                    }}
-                    placeholder="Aggiungi esercizio"
-                    aria-label="Aggiungi esercizio Livello 100"
-                  />
-                  <Button
-                    type="button"
-                    className="h-12 w-12 shrink-0 px-0"
-                    aria-label="Aggiungi esercizio"
-                    onClick={addWatchlistExercise}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
+                <Level100ExercisePicker
+                  value={newExerciseName}
+                  exerciseOptions={availableLevel100ExerciseOptions}
+                  onChange={setNewExerciseName}
+                  onAdd={addWatchlistExercise}
+                />
                 <div className="flex flex-wrap gap-2">
                   {level100ClassFilters.map((filter) => (
                     <Button
