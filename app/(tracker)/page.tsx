@@ -293,7 +293,7 @@ function Level100CompactRow({
     >
       <button
         type="button"
-        className="grid min-w-0 flex-1 gap-3 text-left sm:grid-cols-[36px_1fr_auto]"
+        className="grid min-w-0 flex-1 gap-3 text-left md:grid-cols-[36px_1fr_auto]"
         onClick={onSelect}
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.05] font-mono text-sm font-semibold text-muted-foreground">
@@ -351,7 +351,7 @@ function Level100Podium({
   }
 
   return (
-    <div className="grid gap-3 md:grid-cols-3">
+    <div className="grid gap-3 lg:grid-cols-3">
       {exercises.map((exercise, index) => {
         const isWinner = index === 0;
 
@@ -820,7 +820,7 @@ export default function DashboardPage() {
         />
 
         <Card className="overflow-hidden">
-          <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="grid gap-0 xl:grid-cols-[1.05fr_0.95fr]">
             <CardContent className="space-y-6 p-6 pt-6 sm:p-8 sm:pt-8">
               <div className="space-y-3">
                 <p className="eyebrow">Dashboard Livello 100</p>
@@ -891,7 +891,7 @@ export default function DashboardPage() {
               </div>
             </CardContent>
 
-            <div className="panel-divider order-first bg-white/[0.03] p-6 sm:p-8 lg:order-none lg:border-l lg:border-t-0">
+            <div className="panel-divider order-first bg-white/[0.03] p-6 sm:p-8 xl:order-none xl:border-l xl:border-t-0">
               <div className="space-y-4">
                 <p className="eyebrow">Esercizi principali</p>
                 <div className="flex gap-2">
@@ -1017,7 +1017,7 @@ export default function DashboardPage() {
 
       <section className="grid gap-6 xl:grid-cols-[1.28fr_0.72fr]">
         <Card className="overflow-hidden">
-          <div className="grid gap-0 lg:grid-cols-[1.18fr_0.82fr]">
+          <div className="grid gap-0 xl:grid-cols-[1.05fr_0.95fr]">
             <CardContent className="space-y-6 p-6 pt-6 sm:p-8 sm:pt-8">
               <div className="space-y-3">
                 <p className="eyebrow">Dashboard Livello 100</p>
@@ -1091,7 +1091,7 @@ export default function DashboardPage() {
               </div>
             </CardContent>
 
-            <div className="panel-divider bg-white/[0.03] p-6 sm:p-8 lg:border-l lg:border-t-0">
+            <div className="panel-divider bg-white/[0.03] p-6 sm:p-8 xl:border-l xl:border-t-0">
               <div className="space-y-4">
                 <p className="eyebrow">Esercizi principali</p>
                 <div className="flex gap-2">

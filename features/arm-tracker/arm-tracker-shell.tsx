@@ -47,7 +47,7 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
     <div className="relative min-h-screen overflow-x-hidden bg-background text-foreground">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,146,56,0.16),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(46,179,163,0.08),_transparent_22%)]" />
       <div className="relative mx-auto flex min-h-screen max-w-[1500px] gap-5 px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pt-6 xl:px-8">
-        <aside className="hidden w-[280px] shrink-0 lg:block">
+        <aside className="hidden w-[280px] shrink-0 xl:block">
           <div className="workspace-panel sticky top-6 flex flex-col gap-6 p-5">
             <Link href="/" className="flex items-center gap-4">
               <span className="flex h-12 w-12 items-center justify-center rounded-[20px] bg-primary/15 text-primary">
@@ -146,7 +146,7 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <header className="workspace-panel flex items-center justify-between gap-4 px-5 py-4 lg:hidden">
+          <header className="workspace-panel flex items-center justify-between gap-4 px-5 py-4 xl:hidden">
             <Link href="/" className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-primary/15 text-primary">
                 <Dumbbell className="h-5 w-5" />
@@ -169,7 +169,7 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
           <main className="mx-auto w-full max-w-6xl flex-1">{children}</main>
         </div>
 
-        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08] bg-background/90 px-2 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl lg:hidden">
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08] bg-background/90 px-2 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl xl:hidden">
           <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
             {navItems.map((item) => {
               const Icon = item.icon;
