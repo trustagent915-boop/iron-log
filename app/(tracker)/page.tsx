@@ -1,34 +1,45 @@
-﻿"use client";
+"use client";
 
 import {
   ArrowRight,
   BadgeCheck,
-  CalendarRange,
-  Flame,
+  Crown,
+  Dumbbell,
   History,
+  Plus,
+  Medal,
   Sparkles,
   Target,
+  Trash2,
   Trophy,
-  Zap,
   Weight
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { StatusBadge } from "@/features/arm-tracker/status-badge";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
 import {
+  LEVEL_100_TARGET_EXERCISES,
+  buildLevel100Dashboard,
+  canonicalizeLevel100ExerciseName,
+  getLevel100Score,
+  type Level100Exercise
+} from "@/lib/arm-tracker/level-100";
+import {
   formatDateLabel,
   formatExercisePrescription,
   formatVolume,
-  getGamificationSummary,
   getCustomSessionsWithExercises,
+  getGamificationSummary,
   getHistoryEntries,
   getLastWorkoutDate,
   getMostFrequentExercise,
@@ -37,34 +48,829 @@ import {
   getWeeklyVolume
 } from "@/lib/arm-tracker/selectors";
 
+const level100WatchlistStorageKey = "iron_log_level_100_watchlist";
+const level100ManualRecordsStorageKey = "iron_log_level_100_manual_records";
+
+interface Level100ManualRecord {
+  exerciseName: string;
+  bodyweightKg: number | null;
+  weight: number | null;
+  reps: number | null;
+  seconds: number | null;
+  date: string | null;
+}
+
+type Level100ClassFilter = "all" | "classic" | "calisthenics" | "armwrestling";
+
+const level100ClassFilters: Array<{ id: Level100ClassFilter; label: string }> = [
+  { id: "all", label: "Tutti" },
+  { id: "classic", label: "Classici" },
+  { id: "calisthenics", label: "Calisthenics" },
+  { id: "armwrestling", label: "Armwrestling" }
+];
+
+function formatRecordMeta(exercise: Level100Exercise) {
+  if (exercise.validRecordCount === 0) {
+    return "Da segnare";
+  }
+
+  if (exercise.bestValidWeight !== null) {
+    return `${exercise.bestValidWeight} kg`;
+  }
+
+  if (exercise.bestValidReps !== null) {
+    return `${exercise.bestValidReps} reps`;
+  }
+
+  if (exercise.bestValidSeconds !== null) {
+    return `${exercise.bestValidSeconds}s`;
+  }
+
+  return "Record valido";
+}
+
+function getExerciseClassFilter(exercise: Level100Exercise): Exclude<Level100ClassFilter, "all"> {
+  if (
+    exercise.rule.id === "weighted_bodyweight" ||
+    exercise.rule.id === "bodyweight_reps" ||
+    exercise.rule.id === "one_arm_pull_up" ||
+    exercise.rule.id === "one_arm_isometry" ||
+    exercise.rule.id === "isometric_skill" ||
+    exercise.rule.id === "dynamic_skill"
+  ) {
+    return "calisthenics";
+  }
+
+  if (exercise.rule.id === "arms") {
+    return "armwrestling";
+  }
+
+  return "classic";
+}
+
+function getLevelNumberClassName(level: number) {
+  if (level > 100) {
+    return "text-fuchsia-300 drop-shadow-[0_0_14px_rgba(217,70,239,0.95)]";
+  }
+
+  if (level >= 80) {
+    return "text-emerald-400";
+  }
+
+  if (level >= 60) {
+    return "text-orange-400";
+  }
+
+  return "text-red-400";
+}
+
+function getLevelBarClassName(level: number) {
+  if (level > 100) {
+    return "bg-fuchsia-300 shadow-[0_0_18px_rgba(217,70,239,0.95)]";
+  }
+
+  if (level >= 80) {
+    return "bg-emerald-400";
+  }
+
+  if (level >= 60) {
+    return "bg-orange-400";
+  }
+
+  return "bg-red-400";
+}
+
+function getLevelTierLabel(level: number) {
+  if (level > 100) {
+    return "Neon";
+  }
+
+  if (level >= 80) {
+    return "Pronto";
+  }
+
+  if (level >= 60) {
+    return "In corsa";
+  }
+
+  return "Da migliorare";
+}
+
+function getLevelProgressPercent(level: number) {
+  return Math.min(100, Math.round((Math.max(0, level) / 130) * 100));
+}
+
+function formatRecordDate(value: string | null) {
+  return value ? formatDateLabel(value, "d MMM yyyy") : "-";
+}
+
+function normalizeWatchlistName(value: string) {
+  return canonicalizeLevel100ExerciseName(value).trim();
+}
+
+function getDashboardExerciseKey(value: string) {
+  return normalizeWatchlistName(value).toLowerCase();
+}
+
+function getTodayDate() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function formatNumberInputValue(value: number | null) {
+  return value === null ? "" : String(value);
+}
+
+function parseNumberInputValue(value: string) {
+  const parsed = Number(value.replace(",", "."));
+
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function normalizeManualRecords(value: unknown): Record<string, Level100ManualRecord> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.values(value)
+      .filter((record): record is Partial<Level100ManualRecord> =>
+        Boolean(record && typeof record === "object" && "exerciseName" in record)
+      )
+      .map((record) => {
+        const exerciseName = normalizeWatchlistName(String(record.exerciseName ?? ""));
+
+        return [
+          getDashboardExerciseKey(exerciseName),
+          {
+            exerciseName,
+            bodyweightKg:
+              typeof record.bodyweightKg === "number" && Number.isFinite(record.bodyweightKg)
+                ? record.bodyweightKg
+                : null,
+            weight: typeof record.weight === "number" && Number.isFinite(record.weight) ? record.weight : null,
+            reps: typeof record.reps === "number" && Number.isFinite(record.reps) ? record.reps : null,
+            seconds: typeof record.seconds === "number" && Number.isFinite(record.seconds) ? record.seconds : null,
+            date: typeof record.date === "string" && record.date ? record.date : null
+          }
+        ] as const;
+      })
+      .filter(([, record]) => Boolean(record.exerciseName))
+  );
+}
+
+function applyManualRecordsToExercises(
+  exercises: Level100Exercise[],
+  manualRecords: Record<string, Level100ManualRecord>,
+  bodyweightKg: number
+) {
+  return exercises.map((exercise) => {
+    const manualRecord = manualRecords[getDashboardExerciseKey(exercise.exerciseName)];
+
+    if (!manualRecord) {
+      return exercise;
+    }
+
+    const level = getLevel100Score({
+      exerciseName: exercise.exerciseName,
+      weight: manualRecord.weight,
+      bodyweightKg: manualRecord.bodyweightKg ?? bodyweightKg,
+      reps: manualRecord.reps,
+      seconds: manualRecord.seconds
+    });
+
+    return {
+      ...exercise,
+      bestValidWeight: manualRecord.weight,
+      bestValidReps: manualRecord.reps,
+      bestValidSeconds: manualRecord.seconds,
+      bestValidBodyweightKg: manualRecord.bodyweightKg,
+      bestValidDate: manualRecord.date,
+      latestDate: manualRecord.date,
+      level,
+      rawScore: level,
+      attemptCount: Math.max(1, exercise.attemptCount),
+      validRecordCount: Math.max(1, exercise.validRecordCount)
+    };
+  });
+}
+
+function dedupeWatchlist(names: readonly string[]) {
+  const seen = new Set<string>();
+
+  return names
+    .map(normalizeWatchlistName)
+    .filter((name) => {
+      const key = name.toLowerCase();
+
+      if (!name || seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+}
+
+function Level100CompactRow({
+  exercise,
+  rank,
+  isSelected,
+  onSelect,
+  onRemove
+}: {
+  exercise: Level100Exercise;
+  rank: number;
+  isSelected: boolean;
+  onSelect: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <div
+      className={[
+        "list-row flex items-center justify-between gap-3",
+        isSelected ? "border-primary/45 bg-primary/10" : ""
+      ].join(" ")}
+    >
+      <button
+        type="button"
+        className="grid min-w-0 flex-1 gap-3 text-left sm:grid-cols-[36px_1fr_auto]"
+        onClick={onSelect}
+      >
+        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.05] font-mono text-sm font-semibold text-muted-foreground">
+          {rank}
+        </span>
+        <div className="min-w-0 space-y-2">
+          <div>
+            <p className="truncate font-medium text-foreground">{exercise.exerciseName}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {exercise.rule.label} - {exercise.rule.formulaLabel}
+            </p>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
+            <div
+              className={`h-full rounded-full ${getLevelBarClassName(exercise.level)}`}
+              style={{ width: `${getLevelProgressPercent(exercise.level)}%` }}
+            />
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <div className="flex items-center justify-end gap-2">
+            <span className="data-chip">{getLevelTierLabel(exercise.level)}</span>
+            <p className={`font-mono text-3xl font-semibold ${getLevelNumberClassName(exercise.level)}`}>
+              {exercise.level}
+            </p>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            {formatRecordMeta(exercise)}
+          </p>
+        </div>
+      </button>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="h-9 w-9 shrink-0 px-0 text-muted-foreground hover:text-destructive"
+        aria-label={`Elimina ${exercise.exerciseName}`}
+        onClick={onRemove}
+      >
+        <Trash2 className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+}
+
+function Level100Podium({
+  exercises,
+  onSelect
+}: {
+  exercises: Level100Exercise[];
+  onSelect: (exerciseName: string) => void;
+}) {
+  if (!exercises.length) {
+    return null;
+  }
+
+  return (
+    <div className="grid gap-3 md:grid-cols-3">
+      {exercises.map((exercise, index) => {
+        const isWinner = index === 0;
+
+        return (
+          <button
+            key={exercise.exerciseName}
+            type="button"
+            className={[
+              "rounded-[26px] border bg-white/[0.04] p-4 text-left transition hover:border-primary/45 hover:bg-white/[0.07]",
+              isWinner ? "border-primary/45 shadow-[0_0_36px_rgba(139,92,246,0.16)]" : "border-white/[0.08]"
+            ].join(" ")}
+            onClick={() => onSelect(exercise.exerciseName)}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/15 text-primary">
+                {isWinner ? <Crown className="h-5 w-5" /> : <Medal className="h-5 w-5" />}
+              </span>
+              <span className="data-chip">#{index + 1}</span>
+            </div>
+            <p className="mt-4 truncate font-medium text-foreground">{exercise.exerciseName}</p>
+            <div className="mt-3 flex items-end justify-between gap-3">
+              <p className={`font-mono text-4xl font-semibold ${getLevelNumberClassName(exercise.level)}`}>
+                {exercise.level}
+              </p>
+              <p className="pb-1 text-xs text-muted-foreground">{formatRecordMeta(exercise)}</p>
+            </div>
+            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white/[0.06]">
+              <div
+                className={`h-full rounded-full ${getLevelBarClassName(exercise.level)}`}
+                style={{ width: `${getLevelProgressPercent(exercise.level)}%` }}
+              />
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function Level100CategorySummary({
+  exercises
+}: {
+  exercises: Level100Exercise[];
+}) {
+  const categoryStats = Object.values(
+    exercises.reduce<Record<string, { label: string; total: number; count: number; top: number }>>(
+      (accumulator, exercise) => {
+        const current = accumulator[exercise.rule.label] ?? {
+          label: exercise.rule.label,
+          total: 0,
+          count: 0,
+          top: 0
+        };
+
+        current.total += exercise.level;
+        current.count += 1;
+        current.top = Math.max(current.top, exercise.level);
+        accumulator[exercise.rule.label] = current;
+        return accumulator;
+      },
+      {}
+    )
+  )
+    .map((entry) => ({
+      ...entry,
+      average: entry.count ? Math.round(entry.total / entry.count) : 0
+    }))
+    .sort((left, right) => right.average - left.average)
+    .slice(0, 4);
+
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      {categoryStats.map((entry) => (
+        <div key={entry.label} className="rounded-[22px] border border-white/[0.08] bg-white/[0.03] p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="truncate text-sm font-medium text-foreground">{entry.label}</p>
+            <p className={`font-mono text-xl font-semibold ${getLevelNumberClassName(entry.average)}`}>
+              {entry.average}
+            </p>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Top {entry.top} - {entry.count} esercizi
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Level100RecordDetail({
+  exercise,
+  manualRecord,
+  onSave,
+  onClear
+}: {
+  exercise: Level100Exercise | null;
+  manualRecord: Level100ManualRecord | null;
+  onSave: (record: Level100ManualRecord) => void;
+  onClear: (exerciseName: string) => void;
+}) {
+  const [weightInput, setWeightInput] = useState("");
+  const [recordBodyweightInput, setRecordBodyweightInput] = useState("");
+  const [repsInput, setRepsInput] = useState("");
+  const [secondsInput, setSecondsInput] = useState("");
+  const [dateInput, setDateInput] = useState(getTodayDate());
+
+  useEffect(() => {
+    if (!exercise) {
+      return;
+    }
+
+    setWeightInput(formatNumberInputValue(manualRecord?.weight ?? exercise.bestValidWeight));
+    setRecordBodyweightInput(
+      formatNumberInputValue(manualRecord?.bodyweightKg ?? exercise.bestValidBodyweightKg)
+    );
+    setRepsInput(formatNumberInputValue(manualRecord?.reps ?? exercise.bestValidReps));
+    setSecondsInput(formatNumberInputValue(manualRecord?.seconds ?? exercise.bestValidSeconds));
+    setDateInput(manualRecord?.date ?? exercise.bestValidDate ?? getTodayDate());
+  }, [exercise, manualRecord]);
+
+  if (!exercise) {
+    return (
+      <div className="list-row">
+        <p className="font-medium text-foreground">Seleziona un esercizio</p>
+        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+          Clicca una riga della Dashboard per vedere regola, record valido e distanza dal livello
+          100.
+        </p>
+      </div>
+    );
+  }
+
+  const activeExercise = exercise;
+  const missingLevel = Math.max(0, 100 - activeExercise.level);
+  const isManual = Boolean(manualRecord);
+
+  function saveRecord() {
+    const nextRecord = {
+      exerciseName: activeExercise.exerciseName,
+      bodyweightKg: parseNumberInputValue(recordBodyweightInput),
+      weight: parseNumberInputValue(weightInput),
+      reps: parseNumberInputValue(repsInput),
+      seconds: parseNumberInputValue(secondsInput),
+      date: dateInput || getTodayDate()
+    };
+
+    if (
+      nextRecord.weight === null &&
+      nextRecord.reps === null &&
+      nextRecord.seconds === null
+    ) {
+      onClear(activeExercise.exerciseName);
+      return;
+    }
+
+    onSave(nextRecord);
+  }
+
+  return (
+    <div className="list-row space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="font-medium text-foreground">{exercise.exerciseName}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{exercise.rule.description}</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {isManual ? <span className="data-chip">Modifica manuale</span> : null}
+          <span className={`data-chip ${getLevelNumberClassName(exercise.level)}`}>
+            Lv {exercise.level}/130
+          </span>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Record</p>
+          <p className="mt-1 text-sm text-foreground">{formatRecordMeta(exercise)}</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Data</p>
+          <p className="mt-1 text-sm text-foreground">{formatRecordDate(exercise.bestValidDate)}</p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Validazioni</p>
+          <p className="mt-1 text-sm text-foreground">
+            {exercise.validRecordCount}/{exercise.attemptCount}
+          </p>
+        </div>
+        <div>
+          <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Manca a 100</p>
+          <p className="mt-1 text-sm text-foreground">{missingLevel}</p>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        <div className="space-y-2">
+          <label className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Peso corporeo
+          </label>
+          <Input
+            inputMode="decimal"
+            value={recordBodyweightInput}
+            onChange={(event) => setRecordBodyweightInput(event.target.value)}
+            placeholder="es. 90"
+            aria-label={`Peso corporeo record ${exercise.exerciseName}`}
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Kg / zavorra
+          </label>
+          <Input
+            inputMode="decimal"
+            value={weightInput}
+            onChange={(event) => setWeightInput(event.target.value)}
+            placeholder="es. 100"
+            aria-label={`Kg record ${exercise.exerciseName}`}
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Reps
+          </label>
+          <Input
+            inputMode="decimal"
+            value={repsInput}
+            onChange={(event) => setRepsInput(event.target.value)}
+            placeholder="min 3"
+            aria-label={`Reps record ${exercise.exerciseName}`}
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Secondi iso
+          </label>
+          <Input
+            inputMode="decimal"
+            value={secondsInput}
+            onChange={(event) => setSecondsInput(event.target.value)}
+            placeholder="es. 10"
+            aria-label={`Secondi record ${exercise.exerciseName}`}
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+            Data
+          </label>
+          <Input
+            type="date"
+            value={dateInput}
+            onChange={(event) => setDateInput(event.target.value)}
+            aria-label={`Data record ${exercise.exerciseName}`}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" onClick={saveRecord}>
+          Salva record
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={() => onClear(exercise.exerciseName)}>
+          Ripristina import
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { data, activePlan, isReady } = useArmTracker();
+  const [bodyweightInput, setBodyweightInput] = useState("90");
+  const [watchlistNames, setWatchlistNames] = useState<string[]>(() =>
+    dedupeWatchlist(LEVEL_100_TARGET_EXERCISES)
+  );
+  const [newExerciseName, setNewExerciseName] = useState("");
+  const [selectedExerciseName, setSelectedExerciseName] = useState<string | null>(watchlistNames[0] ?? null);
+  const [classFilter, setClassFilter] = useState<Level100ClassFilter>("all");
+  const [watchlistLoaded, setWatchlistLoaded] = useState(false);
+  const [manualRecords, setManualRecords] = useState<Record<string, Level100ManualRecord>>({});
+  const [manualRecordsLoaded, setManualRecordsLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const storedValue = window.localStorage.getItem(level100WatchlistStorageKey);
+
+      if (!storedValue) {
+        setWatchlistLoaded(true);
+        return;
+      }
+
+      const parsedValue = JSON.parse(storedValue);
+
+      if (Array.isArray(parsedValue)) {
+        const nextWatchlist = dedupeWatchlist(parsedValue.filter((name): name is string => typeof name === "string"));
+
+        if (nextWatchlist.length) {
+          setWatchlistNames(nextWatchlist);
+          setSelectedExerciseName((currentName) => currentName ?? nextWatchlist[0] ?? null);
+        }
+      }
+    } catch {
+      window.localStorage.removeItem(level100WatchlistStorageKey);
+    } finally {
+      setWatchlistLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!watchlistLoaded) {
+      return;
+    }
+
+    window.localStorage.setItem(level100WatchlistStorageKey, JSON.stringify(watchlistNames));
+
+    if (!watchlistNames.length) {
+      setSelectedExerciseName(null);
+      return;
+    }
+
+    if (!selectedExerciseName || !watchlistNames.some((name) => name === selectedExerciseName)) {
+      setSelectedExerciseName(watchlistNames[0] ?? null);
+    }
+  }, [selectedExerciseName, watchlistLoaded, watchlistNames]);
+
+  useEffect(() => {
+    try {
+      const storedValue = window.localStorage.getItem(level100ManualRecordsStorageKey);
+
+      if (storedValue) {
+        setManualRecords(normalizeManualRecords(JSON.parse(storedValue)));
+      }
+    } catch {
+      window.localStorage.removeItem(level100ManualRecordsStorageKey);
+    } finally {
+      setManualRecordsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!manualRecordsLoaded) {
+      return;
+    }
+
+    window.localStorage.setItem(level100ManualRecordsStorageKey, JSON.stringify(manualRecords));
+  }, [manualRecords, manualRecordsLoaded]);
+
+  function addWatchlistExercise() {
+    const exerciseName = normalizeWatchlistName(newExerciseName);
+
+    if (!exerciseName) {
+      return;
+    }
+
+    setWatchlistNames((currentNames) => dedupeWatchlist([...currentNames, exerciseName]));
+    setSelectedExerciseName(exerciseName);
+    setNewExerciseName("");
+  }
+
+  function removeWatchlistExercise(exerciseName: string) {
+    setWatchlistNames((currentNames) => currentNames.filter((name) => name !== exerciseName));
+    setManualRecords((currentRecords) => {
+      const nextRecords = { ...currentRecords };
+
+      delete nextRecords[getDashboardExerciseKey(exerciseName)];
+
+      return nextRecords;
+    });
+  }
+
+  function saveManualRecord(record: Level100ManualRecord) {
+    const exerciseName = normalizeWatchlistName(record.exerciseName);
+
+    setManualRecords((currentRecords) => ({
+      ...currentRecords,
+      [getDashboardExerciseKey(exerciseName)]: {
+        ...record,
+        exerciseName
+      }
+    }));
+  }
+
+  function clearManualRecord(exerciseName: string) {
+    setManualRecords((currentRecords) => {
+      const nextRecords = { ...currentRecords };
+
+      delete nextRecords[getDashboardExerciseKey(exerciseName)];
+
+      return nextRecords;
+    });
+  }
 
   if (!isReady) {
     return <LoadingPanel />;
   }
+
+  const parsedBodyweight = Number(bodyweightInput.replace(",", "."));
+  const bodyweightKg = Number.isFinite(parsedBodyweight) && parsedBodyweight > 0 ? parsedBodyweight : 90;
+  const level100 = buildLevel100Dashboard(data, {
+    bodyweightKg,
+    limit: Math.max(36, watchlistNames.length),
+    pinnedExerciseNames: watchlistNames
+  });
+  const level100MainExercises = applyManualRecordsToExercises(
+    level100.exercises.slice(0, watchlistNames.length),
+    manualRecords,
+    bodyweightKg
+  );
+  const level100FilteredExercises =
+    classFilter === "all"
+      ? level100MainExercises
+      : level100MainExercises.filter((exercise) => getExerciseClassFilter(exercise) === classFilter);
+  const level100FilterCounts = level100ClassFilters.reduce<Record<Level100ClassFilter, number>>(
+    (counts, filter) => {
+      counts[filter.id] =
+        filter.id === "all"
+          ? level100MainExercises.length
+          : level100MainExercises.filter((exercise) => getExerciseClassFilter(exercise) === filter.id).length;
+
+      return counts;
+    },
+    {
+      all: 0,
+      classic: 0,
+      calisthenics: 0,
+      armwrestling: 0
+    }
+  );
+  const level100RankedExercises = [...level100FilteredExercises].sort((left, right) => {
+    if (right.level !== left.level) {
+      return right.level - left.level;
+    }
+
+    if (right.validRecordCount !== left.validRecordCount) {
+      return right.validRecordCount - left.validRecordCount;
+    }
+
+    return left.exerciseName.localeCompare(right.exerciseName, "it");
+  });
+  const level100PodiumExercises = level100RankedExercises.slice(0, 3);
+  const level100ValidatedExercises = level100FilteredExercises.filter((exercise) => exercise.validRecordCount > 0);
+  const level100TotalLevel = level100ValidatedExercises.reduce((sum, exercise) => sum + exercise.level, 0);
+  const level100Summary = {
+    averageLevel: level100ValidatedExercises.length
+      ? Math.round(level100TotalLevel / level100ValidatedExercises.length)
+      : 0,
+    topLevel: level100ValidatedExercises.reduce((maxLevel, exercise) => Math.max(maxLevel, exercise.level), 0),
+    trackedCount: level100FilteredExercises.length,
+    validatedCount: level100ValidatedExercises.length
+  };
+  const selectedLevel100Exercise =
+    level100MainExercises.find((exercise) => exercise.exerciseName === selectedExerciseName) ??
+    level100MainExercises[0] ??
+    null;
+  const selectedManualRecord = selectedLevel100Exercise
+    ? manualRecords[getDashboardExerciseKey(selectedLevel100Exercise.exerciseName)] ?? null
+    : null;
+  const pendingMetricCount = level100.exercises.filter((exercise) => exercise.rule.needsDedicatedMetric).length;
 
   if (!activePlan) {
     return (
       <div className="page-enter space-y-8">
         <PageHeader
           eyebrow="Dashboard"
-          title="Iron Log e pronto al primo import"
-          description="Carica il foglio Excel del tuo programma e trasformalo in un cockpit operativo con timeline, log, custom workout e statistiche locali."
+          title="Dashboard Livello 100"
+          description="Gli esercizi principali sono gia pronti da monitorare. Importa il programma quando vuoi collegare storico, sedute e nuovi record."
         />
 
         <Card className="overflow-hidden">
           <div className="grid gap-0 lg:grid-cols-[1.15fr_0.85fr]">
             <CardContent className="space-y-6 p-6 pt-6 sm:p-8 sm:pt-8">
               <div className="space-y-3">
-                <p className="eyebrow">Setup iniziale</p>
+                <p className="eyebrow">Dashboard Livello 100</p>
                 <h2 className="text-3xl font-semibold text-foreground sm:text-4xl">
-                  Importa il programma una volta, poi gestisci ogni seduta da qui.
+                  Parti dai fondamentali, poi aggiorna il livello a ogni nuovo record.
                 </h2>
                 <p className="max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
-                  Iron Log legge il foglio, organizza settimane ed esercizi, poi ti porta
-                  rapidamente dal piano al log reale senza backend o passaggi superflui.
+                  Target 100, massimo 130. Gambe divise per due, classici in kg diretti,
+                  braccia moltiplicate per due e corpo libero calcolato da peso corporeo e
+                  zavorra.
                 </p>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="level-100-bodyweight"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Peso corporeo
+                  </label>
+                  <Input
+                    id="level-100-bodyweight"
+                    inputMode="decimal"
+                    value={bodyweightInput}
+                    onChange={(event) => setBodyweightInput(event.target.value)}
+                    aria-label="Peso corporeo"
+                  />
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="list-row">
+                    <p className="text-sm text-muted-foreground">Livello medio</p>
+                    <p className={`mt-1 font-mono text-2xl font-semibold ${getLevelNumberClassName(level100Summary.averageLevel)}`}>
+                      {level100Summary.averageLevel}
+                    </p>
+                  </div>
+                  <div className="list-row">
+                    <p className="text-sm text-muted-foreground">Top level</p>
+                    <p className={`mt-1 font-mono text-2xl font-semibold ${getLevelNumberClassName(level100Summary.topLevel)}`}>
+                      {level100Summary.topLevel}
+                    </p>
+                  </div>
+                  <div className="list-row">
+                    <p className="text-sm text-muted-foreground">Da configurare</p>
+                    <p className="mt-1 font-mono text-2xl font-semibold text-foreground">
+                      {pendingMetricCount}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-3">
@@ -77,19 +883,95 @@ export default function DashboardPage() {
               </div>
 
               <div className="flex flex-wrap gap-2">
-                <span className="data-chip">Import guidato da Excel</span>
-                <span className="data-chip">Storico locale immediato</span>
-                <span className="data-chip">Statistiche su peso, reps e volume</span>
+                <span className="data-chip">Gambe: kg / 2</span>
+                <span className="data-chip">Classici: kg x 1</span>
+                <span className="data-chip">Braccia: kg x 2</span>
+                <span className="data-chip">Corpo libero: peso + zavorra</span>
+                <span className="data-chip">Target 100 - Max 130</span>
               </div>
             </CardContent>
 
-            <div className="panel-divider bg-white/[0.03] p-6 sm:p-8 lg:border-l lg:border-t-0">
+            <div className="panel-divider order-first bg-white/[0.03] p-6 sm:p-8 lg:order-none lg:border-l lg:border-t-0">
               <div className="space-y-4">
-                <p className="eyebrow">Cosa ottieni</p>
-                <div className="space-y-4 text-sm leading-7 text-muted-foreground">
-                  <p>Timeline delle sessioni pianificate e accesso rapido al log.</p>
-                  <p>Custom workout per le sedute extra fuori programma.</p>
-                  <p>Storico compatto per confrontare previsto, eseguito e progressione.</p>
+                <p className="eyebrow">Esercizi principali</p>
+                <div className="flex gap-2">
+                  <Input
+                    value={newExerciseName}
+                    onChange={(event) => setNewExerciseName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addWatchlistExercise();
+                      }
+                    }}
+                    placeholder="Aggiungi esercizio"
+                    aria-label="Aggiungi esercizio Livello 100"
+                  />
+                  <Button
+                    type="button"
+                    className="h-12 w-12 shrink-0 px-0"
+                    aria-label="Aggiungi esercizio"
+                    onClick={addWatchlistExercise}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {level100ClassFilters.map((filter) => (
+                    <Button
+                      key={filter.id}
+                      type="button"
+                      size="sm"
+                      variant={classFilter === filter.id ? "default" : "outline"}
+                      className="gap-2"
+                      onClick={() => setClassFilter(filter.id)}
+                    >
+                      {filter.label}
+                      <span className="font-mono text-xs opacity-75">{level100FilterCounts[filter.id]}</span>
+                    </Button>
+                  ))}
+                </div>
+                <Level100Podium
+                  exercises={level100PodiumExercises}
+                  onSelect={setSelectedExerciseName}
+                />
+                <Level100CategorySummary exercises={level100FilteredExercises} />
+                <div className="flex items-center justify-between gap-3">
+                  <p className="eyebrow">Classifica completa</p>
+                  <span className="data-chip">{level100Summary.validatedCount}/{level100Summary.trackedCount} validi</span>
+                </div>
+                {!level100RankedExercises.length ? (
+                  <div className="list-row">
+                    <p className="font-medium text-foreground">Nessun esercizio in questo filtro</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      Aggiungi un esercizio o passa a una categoria diversa della classifica.
+                    </p>
+                  </div>
+                ) : null}
+                <div className="max-h-[620px] space-y-3 overflow-y-auto pr-1">
+                  {level100RankedExercises.map((exercise, index) => {
+                    const isSelected = exercise.exerciseName === selectedLevel100Exercise?.exerciseName;
+
+                    return (
+                      <div key={exercise.exerciseName} className="space-y-3">
+                        <Level100CompactRow
+                          exercise={exercise}
+                          rank={index + 1}
+                          isSelected={isSelected}
+                          onSelect={() => setSelectedExerciseName(exercise.exerciseName)}
+                          onRemove={() => removeWatchlistExercise(exercise.exerciseName)}
+                        />
+                        {isSelected ? (
+                          <Level100RecordDetail
+                            exercise={selectedLevel100Exercise}
+                            manualRecord={selectedManualRecord}
+                            onSave={saveManualRecord}
+                            onClear={clearManualRecord}
+                          />
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
@@ -119,8 +1001,8 @@ export default function DashboardPage() {
     <div className="page-enter space-y-8">
       <PageHeader
         eyebrow="Dashboard"
-        title={activePlan.name}
-        description={`Workspace attivo importato da ${activePlan.sourceFileName}. Qui controlli il piano, apri al volo il prossimo log e tieni vicine le sedute extra.`}
+        title="Dashboard Livello 100"
+        description={`Piano attivo: ${activePlan.name}. Monitorati: Squat, Stacco, Panca, Military, Pull Up, Dips, One Arm Pull Up, Side Pressure e braccia.`}
         actions={
           <div className="flex flex-wrap gap-3">
             <Button asChild variant="outline">
@@ -138,79 +1020,159 @@ export default function DashboardPage() {
           <div className="grid gap-0 lg:grid-cols-[1.18fr_0.82fr]">
             <CardContent className="space-y-6 p-6 pt-6 sm:p-8 sm:pt-8">
               <div className="space-y-3">
-                <p className="eyebrow">Training cockpit</p>
+                <p className="eyebrow">Dashboard Livello 100</p>
                 <h2 className="text-3xl font-semibold text-foreground sm:text-4xl">
-                  Tieni il piano in vista e passa al log quando la seduta chiama.
+                  Tieni sotto controllo gli esercizi chiave e porta tutto a livello 100.
                 </h2>
                 <p className="max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
-                  La pagina iniziale e stata ripensata come una cabina operativa: priorita
-                  chiara, stato del piano, accesso rapido ai workout custom e timeline breve per
-                  non perdere il contesto.
+                  La home resta il cockpit del programma, ma ora mette davanti i record principali:
+                  target 100, massimo 130, con regole diverse per gambe, classici, braccia e corpo
+                  libero.
                 </p>
               </div>
 
+              <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
+                <div className="space-y-2">
+                  <label
+                    htmlFor="level-100-bodyweight"
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Peso corporeo
+                  </label>
+                  <Input
+                    id="level-100-bodyweight"
+                    inputMode="decimal"
+                    value={bodyweightInput}
+                    onChange={(event) => setBodyweightInput(event.target.value)}
+                    aria-label="Peso corporeo"
+                  />
+                </div>
+
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="list-row">
+                    <p className="text-sm text-muted-foreground">Livello medio</p>
+                    <p className={`mt-1 font-mono text-2xl font-semibold ${getLevelNumberClassName(level100Summary.averageLevel)}`}>
+                      {level100Summary.averageLevel}
+                    </p>
+                  </div>
+                  <div className="list-row">
+                    <p className="text-sm text-muted-foreground">Top level</p>
+                    <p className={`mt-1 font-mono text-2xl font-semibold ${getLevelNumberClassName(level100Summary.topLevel)}`}>
+                      {level100Summary.topLevel}
+                    </p>
+                  </div>
+                  <div className="list-row">
+                    <p className="text-sm text-muted-foreground">Da configurare</p>
+                    <p className="mt-1 font-mono text-2xl font-semibold text-foreground">
+                      {pendingMetricCount}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="flex flex-wrap gap-2">
-                <span className="data-chip">Completamento piano {completionRate}%</span>
-                <span className="data-chip">{customSessions.length} custom workout archiviati</span>
-                <span className="data-chip">Livello {gamification.level} · {gamification.totalXp} XP</span>
-                <span className="data-chip">
-                  Ultimo log {lastWorkoutDate ? formatDateLabel(lastWorkoutDate, "d MMM") : "non ancora registrato"}
-                </span>
+                <span className="data-chip">Gambe: kg / 2</span>
+                <span className="data-chip">Classici: kg x 1</span>
+                <span className="data-chip">Braccia: kg x 2</span>
+                <span className="data-chip">Corpo libero: peso + zavorra</span>
+                <span className="data-chip">Target 100 - Max 130</span>
               </div>
 
               <div className="flex flex-wrap gap-3">
                 <Button asChild>
-                  <Link href={(upcomingSession ? `/log/${upcomingSession.id}` : "/program") as Route}>
-                    {upcomingSession ? "Apri il prossimo log" : "Apri il programma"}
+                  <Link href={"/custom-workout/new" as Route}>
+                    Segna nuovo record
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Link>
                 </Button>
                 <Button asChild variant="outline">
-                  <Link href={"/history" as Route}>Apri lo storico</Link>
+                  <Link href={"/stats" as Route}>Apri statistiche</Link>
                 </Button>
               </div>
             </CardContent>
 
             <div className="panel-divider bg-white/[0.03] p-6 sm:p-8 lg:border-l lg:border-t-0">
               <div className="space-y-4">
-                <p className="eyebrow">Prossima finestra utile</p>
-                {upcomingSession ? (
-                  <>
-                    <div className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <h3 className="text-2xl font-semibold text-foreground">
-                          {formatDateLabel(upcomingSession.sessionDate)}
-                        </h3>
-                        <StatusBadge status={upcomingSession.status} />
-                      </div>
-                      <p className="text-sm leading-6 text-muted-foreground">
-                        {upcomingSession.dayLabel ?? "Sessione pianificata"} con {" "}
-                        {upcomingSession.exercises.length} esercizi pronti per il log.
-                      </p>
-                    </div>
-
-                    <div className="space-y-3">
-                      {upcomingSession.exercises.slice(0, 3).map((exercise) => (
-                        <div key={exercise.id} className="list-row">
-                          <p className="font-medium text-foreground">{exercise.exerciseName}</p>
-                          <p className="mt-1 text-sm text-muted-foreground">
-                            {formatExercisePrescription(exercise)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-sm leading-7 text-muted-foreground">
-                      Nessuna seduta futura pianificata. Puoi entrare nello storico o creare una
-                      sessione extra per mantenere il tracking completo.
-                    </p>
-                    <Button asChild variant="outline">
-                      <Link href={"/custom-workout/new" as Route}>Crea una sessione extra</Link>
+                <p className="eyebrow">Esercizi principali</p>
+                <div className="flex gap-2">
+                  <Input
+                    value={newExerciseName}
+                    onChange={(event) => setNewExerciseName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addWatchlistExercise();
+                      }
+                    }}
+                    placeholder="Aggiungi esercizio"
+                    aria-label="Aggiungi esercizio Livello 100"
+                  />
+                  <Button
+                    type="button"
+                    className="h-12 w-12 shrink-0 px-0"
+                    aria-label="Aggiungi esercizio"
+                    onClick={addWatchlistExercise}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {level100ClassFilters.map((filter) => (
+                    <Button
+                      key={filter.id}
+                      type="button"
+                      size="sm"
+                      variant={classFilter === filter.id ? "default" : "outline"}
+                      className="gap-2"
+                      onClick={() => setClassFilter(filter.id)}
+                    >
+                      {filter.label}
+                      <span className="font-mono text-xs opacity-75">{level100FilterCounts[filter.id]}</span>
                     </Button>
+                  ))}
+                </div>
+                <Level100Podium
+                  exercises={level100PodiumExercises}
+                  onSelect={setSelectedExerciseName}
+                />
+                <Level100CategorySummary exercises={level100FilteredExercises} />
+                <div className="flex items-center justify-between gap-3">
+                  <p className="eyebrow">Classifica completa</p>
+                  <span className="data-chip">{level100Summary.validatedCount}/{level100Summary.trackedCount} validi</span>
+                </div>
+                {!level100RankedExercises.length ? (
+                  <div className="list-row">
+                    <p className="font-medium text-foreground">Nessun esercizio in questo filtro</p>
+                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                      Aggiungi un esercizio o passa a una categoria diversa della classifica.
+                    </p>
                   </div>
-                )}
+                ) : null}
+                <div className="max-h-[620px] space-y-3 overflow-y-auto pr-1">
+                  {level100RankedExercises.map((exercise, index) => {
+                    const isSelected = exercise.exerciseName === selectedLevel100Exercise?.exerciseName;
+
+                    return (
+                      <div key={exercise.exerciseName} className="space-y-3">
+                        <Level100CompactRow
+                          exercise={exercise}
+                          rank={index + 1}
+                          isSelected={isSelected}
+                          onSelect={() => setSelectedExerciseName(exercise.exerciseName)}
+                          onRemove={() => removeWatchlistExercise(exercise.exerciseName)}
+                        />
+                        {isSelected ? (
+                          <Level100RecordDetail
+                            exercise={selectedLevel100Exercise}
+                            manualRecord={selectedManualRecord}
+                            onSave={saveManualRecord}
+                            onClear={clearManualRecord}
+                          />
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>
@@ -220,16 +1182,23 @@ export default function DashboardPage() {
           <Card>
             <CardHeader>
               <p className="eyebrow">Progress ladder</p>
-              <CardTitle className="text-2xl">La tua progressione resta leggibile anche nel lungo periodo</CardTitle>
+              <CardTitle className="text-2xl">
+                La tua progressione resta leggibile anche nel lungo periodo
+              </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4 text-sm leading-7 text-muted-foreground">
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-medium text-foreground">Livello {gamification.level}</p>
-                  <span className="data-chip">{gamification.xpIntoLevel}/{gamification.xpForNextLevel} XP</span>
+                  <span className="data-chip">
+                    {gamification.xpIntoLevel}/{gamification.xpForNextLevel} XP
+                  </span>
                 </div>
                 <Progress value={gamification.levelProgress} />
-                <p>Ogni log salva volume, stato sessione e PR in modo persistente e li trasforma in avanzamento reale.</p>
+                <p>
+                  Ogni log salva volume, stato sessione e PR in modo persistente e li trasforma
+                  in avanzamento reale.
+                </p>
               </div>
               <div className="list-row">
                 <p className="font-medium text-foreground">Streak attuale</p>
@@ -240,7 +1209,10 @@ export default function DashboardPage() {
               </div>
               <div className="list-row">
                 <p className="font-medium text-foreground">Record personali</p>
-                <p>{gamification.recordBreakCount} PR rotti nel tempo e {unlockedBadges.length} badge gia sbloccati.</p>
+                <p>
+                  {gamification.recordBreakCount} PR rotti nel tempo e {unlockedBadges.length}{" "}
+                  badge gia sbloccati.
+                </p>
               </div>
               <div className="list-row">
                 <p className="font-medium text-foreground">Focus ricorrente</p>
@@ -302,10 +1274,10 @@ export default function DashboardPage() {
           icon={<Weight className="h-5 w-5" />}
         />
         <MetricCard
-          label="Livello atleta"
-          value={`Lv ${gamification.level}`}
-          hint={`${gamification.totalXp} XP accumulati tra log, volume e record personali.`}
-          icon={<Zap className="h-5 w-5" />}
+          label="Livello 100"
+          value={`${level100Summary.validatedCount}/${level100Summary.trackedCount}`}
+          hint="Esercizi con almeno un record valido nella nuova dashboard."
+          icon={<Medal className="h-5 w-5" />}
         />
         <MetricCard
           label="Badge sbloccati"
@@ -376,7 +1348,7 @@ export default function DashboardPage() {
                     <span className="data-chip">{formatDateLabel(session.sessionDate, "d MMM")}</span>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    {session.exercises.length} esercizi pronti - {" "}
+                    {session.exercises.length} esercizi pronti -{" "}
                     {session.exercises
                       .slice(0, 2)
                       .map((exercise) => exercise.exerciseName)

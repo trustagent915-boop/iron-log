@@ -22,6 +22,7 @@ import {
 } from "@/lib/arm-tracker/selectors";
 
 interface ExerciseDraft {
+  exerciseName: string;
   actualSets: string;
   actualReps: string;
   actualWeight: string;
@@ -38,6 +39,7 @@ export default function LogWorkoutPage() {
   const router = useRouter();
   const { findSessionDetails, isReady, saveWorkoutLog } = useArmTracker();
   const [performedDate, setPerformedDate] = useState("");
+  const [bodyweightInput, setBodyweightInput] = useState("");
   const [overallNotes, setOverallNotes] = useState("");
   const [drafts, setDrafts] = useState<Record<string, ExerciseDraft>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -53,6 +55,7 @@ export default function LogWorkoutPage() {
     }
 
     setPerformedDate(currentDetails.workoutLog?.performedDate ?? currentDetails.session.sessionDate);
+    setBodyweightInput(toFieldValue(currentDetails.workoutLog?.bodyweightKg ?? null));
     setOverallNotes(currentDetails.workoutLog?.overallNotes ?? "");
     setDrafts(
       currentDetails.exercises.reduce<Record<string, ExerciseDraft>>((accumulator, exercise) => {
@@ -61,6 +64,7 @@ export default function LogWorkoutPage() {
         );
 
         accumulator[exercise.id] = {
+          exerciseName: existingExerciseLog?.exerciseNameSnapshot ?? exercise.exerciseName,
           actualSets: toFieldValue(existingExerciseLog?.actualSets ?? null),
           actualReps: toFieldValue(existingExerciseLog?.actualReps ?? null),
           actualWeight: toFieldValue(existingExerciseLog?.actualWeight ?? null),
@@ -110,12 +114,14 @@ export default function LogWorkoutPage() {
       saveWorkoutLog({
         sessionId: sessionDetails.session.id,
         performedDate,
+        bodyweightKg: parseInputNumber(bodyweightInput),
         overallNotes,
         exercises: sessionDetails.exercises.map((exercise) => {
           const draft = drafts[exercise.id];
 
           return {
             planExerciseId: exercise.id,
+            exerciseNameSnapshot: draft?.exerciseName ?? exercise.exerciseName,
             actualSets: parseInputNumber(draft?.actualSets ?? ""),
             actualReps: parseInputNumber(draft?.actualReps ?? ""),
             actualWeight: parseInputNumber(draft?.actualWeight ?? ""),
@@ -157,7 +163,7 @@ export default function LogWorkoutPage() {
         <CardHeader>
           <CardTitle>Dati generali</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-[220px_1fr]">
+        <CardContent className="grid gap-4 md:grid-cols-[220px_220px_1fr]">
           <div className="space-y-2">
             <label htmlFor="performed-date" className="text-sm font-medium text-foreground">
               Data esecuzione
@@ -168,6 +174,19 @@ export default function LogWorkoutPage() {
               type="date"
               value={performedDate}
               onChange={(event) => setPerformedDate(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="bodyweight-kg" className="text-sm font-medium text-foreground">
+              Peso corporeo (kg)
+            </label>
+            <Input
+              id="bodyweight-kg"
+              name="bodyweight-kg"
+              inputMode="decimal"
+              value={bodyweightInput}
+              onChange={(event) => setBodyweightInput(event.target.value)}
+              placeholder="90"
             />
           </div>
           <div className="space-y-2">
@@ -188,6 +207,7 @@ export default function LogWorkoutPage() {
       <div className="space-y-4">
         {sessionDetails.exercises.map((exercise) => {
           const draft = drafts[exercise.id] ?? {
+            exerciseName: exercise.exerciseName,
             actualSets: "",
             actualReps: "",
             actualWeight: "",
@@ -224,6 +244,23 @@ export default function LogWorkoutPage() {
                 </Button>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label
+                    htmlFor={`exercise-name-${exercise.id}`}
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Esercizio registrato
+                  </label>
+                  <Input
+                    id={`exercise-name-${exercise.id}`}
+                    name={`exercise-name-${exercise.id}`}
+                    value={draft.exerciseName}
+                    onChange={(event) =>
+                      updateDraft(exercise.id, { exerciseName: event.target.value })
+                    }
+                    disabled={draft.skipped}
+                  />
+                </div>
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
                     <label

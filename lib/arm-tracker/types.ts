@@ -37,6 +37,7 @@ export interface WorkoutLog {
   id: string;
   planSessionId: string;
   performedDate: string;
+  bodyweightKg?: number | null;
   overallNotes: string | null;
   completionStatus: WorkoutCompletionStatus;
   createdAt: string;
@@ -204,6 +205,7 @@ export interface CreateCustomSessionResult {
 
 export interface WorkoutExerciseInput {
   planExerciseId: string;
+  exerciseNameSnapshot?: string | null;
   actualWeight: number | null;
   actualReps: number | null;
   actualSets: number | null;
@@ -214,6 +216,7 @@ export interface WorkoutExerciseInput {
 export interface SaveWorkoutLogInput {
   sessionId: string;
   performedDate: string;
+  bodyweightKg?: number | null;
   overallNotes: string | null;
   exercises: WorkoutExerciseInput[];
 }

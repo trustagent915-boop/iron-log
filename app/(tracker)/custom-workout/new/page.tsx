@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
+import { getCustomWorkoutValidationState } from "@/lib/arm-tracker/custom-workout-validation";
 import {
   getCustomSessionsWithExercises,
   getExerciseLibraryOptions,
@@ -87,6 +88,7 @@ export default function NewCustomWorkoutPage() {
   const planSessions = getPlanSessions(data, activePlan.id);
   const customSessions = getCustomSessionsWithExercises(data, activePlan.id);
   const namedExercises = exercises.filter((exercise) => exercise.exerciseName.trim()).length;
+  const validationState = getCustomWorkoutValidationState({ sessionDate, exercises });
 
   function updateExercise(exerciseId: string, patch: Partial<ExerciseDraft>) {
     setExercises((currentExercises) =>
@@ -114,6 +116,12 @@ export default function NewCustomWorkoutPage() {
 
   function handleSubmit() {
     setErrorMessage(null);
+
+    if (!validationState.canSubmit) {
+      setErrorMessage(validationState.message);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -391,13 +399,16 @@ export default function NewCustomWorkoutPage() {
             registrare i dati reali.
           </p>
           <div className="flex flex-wrap gap-3">
-            <Button onClick={handleSubmit} disabled={isSubmitting || !sessionDate}>
+            <Button onClick={handleSubmit} disabled={isSubmitting || !validationState.canSubmit}>
               {isSubmitting ? "Creazione..." : "Crea e apri il log"}
             </Button>
             <Button asChild variant="outline">
               <Link href={"/program" as Route}>Annulla</Link>
             </Button>
           </div>
+          {!validationState.canSubmit ? (
+            <p className="text-sm leading-6 text-muted-foreground">{validationState.message}</p>
+          ) : null}
         </CardContent>
       </Card>
 

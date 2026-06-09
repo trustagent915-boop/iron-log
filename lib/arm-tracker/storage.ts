@@ -155,6 +155,7 @@ function normalizeWorkoutLog(raw: unknown): WorkoutLog | null {
     id: asString(raw.id, createFallbackId("workout")),
     planSessionId: asString(raw.planSessionId),
     performedDate: asString(raw.performedDate, new Date(0).toISOString().slice(0, 10)),
+    bodyweightKg: asNullableNumber(raw.bodyweightKg),
     overallNotes: asNullableString(raw.overallNotes),
     completionStatus:
       raw.completionStatus === "partial" || raw.completionStatus === "skipped"
