@@ -141,7 +141,8 @@ export const LEVEL_100_ARMWRESTLING_BASE_EXERCISES = [
   "Cupping",
   "Pronation",
   "Supination",
-  "Wrist Curl"
+  "Wrist Curl",
+  "Rising Belt Curl"
 ] as const;
 
 const level100ArmwrestlingSidedExercises = LEVEL_100_ARMWRESTLING_BASE_EXERCISES.flatMap((exerciseName) => [
@@ -287,6 +288,10 @@ export function canonicalizeLevel100ExerciseName(rawName: string) {
     return formatArmwrestlingExerciseName("Wrist Curl", normalized);
   }
 
+  if (includesAny(normalized, ["rising belt curl", "belt curl"])) {
+    return formatArmwrestlingExerciseName("Rising Belt Curl", normalized);
+  }
+
   if (includesAny(normalized, ["front lever"])) {
     return "Front Lever";
   }
@@ -367,7 +372,8 @@ export function getLevel100ExerciseRule(exerciseName: string): Level100Rule {
       "cupping",
       "pronation",
       "supination",
-      "wrist"
+      "wrist",
+      "rising belt curl"
     ])
   ) {
     return level100Rules.arms;

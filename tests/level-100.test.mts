@@ -36,6 +36,8 @@ test("scores arm wrestling arm exercises with doubled weight", () => {
   assert.equal(getLevel100Score({ exerciseName: "Side Pressure Destro", weight: 30 }), 60);
   assert.equal(getLevel100Score({ exerciseName: "Side Pressure Sinistro", weight: 25 }), 50);
   assert.equal(getLevel100Score({ exerciseName: "Cupping", weight: 35 }), 70);
+  assert.equal(getLevel100Score({ exerciseName: "Rising Belt Curl Destro", weight: 25 }), 50);
+  assert.equal(getLevel100Score({ exerciseName: "Rising Belt Curl Sinistro", weight: 20 }), 40);
 });
 
 test("keeps right and left armwrestling records separated", () => {
@@ -90,6 +92,8 @@ test("keeps right and left armwrestling records separated", () => {
 
   assert.equal(canonicalizeLevel100ExerciseName("Side Pressure braccio destro"), "Side Pressure Destro");
   assert.equal(canonicalizeLevel100ExerciseName("Side Pressure braccio sinistro"), "Side Pressure Sinistro");
+  assert.equal(canonicalizeLevel100ExerciseName("Rising belt curl dx"), "Rising Belt Curl Destro");
+  assert.equal(canonicalizeLevel100ExerciseName("Rising belt curl sx"), "Rising Belt Curl Sinistro");
   assert.equal(right?.level, 60);
   assert.equal(left?.level, 40);
 });
@@ -375,6 +379,8 @@ test("pins target exercises so the dashboard always shows the main watchlist", (
   assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "Side Pressure Sinistro"));
   assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "Back Pressure Destro"));
   assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "Back Pressure Sinistro"));
+  assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "Rising Belt Curl Destro"));
+  assert.ok(dashboard.exercises.some((exercise) => exercise.exerciseName === "Rising Belt Curl Sinistro"));
 });
 
 test("classifies suggested untracked cases without forcing them into classic kg scoring", () => {

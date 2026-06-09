@@ -57,7 +57,9 @@ const level100ManualRecordsStorageKey = "iron_log_level_100_manual_records";
 const level100WatchlistMigrationStorageKey = "iron_log_level_100_watchlist_isometries_v1";
 const level100ArmwrestlingSidesMigrationStorageKey = "iron_log_level_100_armwrestling_sides_v1";
 const level100StatsExercisesMigrationStorageKey = "iron_log_level_100_stats_exercises_v1";
+const level100RisingBeltCurlMigrationStorageKey = "iron_log_level_100_rising_belt_curl_v1";
 const level100DefaultIsometryExercises = ["Back Lever", "L-Sit", "Handstand Hold"] as const;
+const level100RisingBeltCurlExercises = ["Rising Belt Curl Destro", "Rising Belt Curl Sinistro"] as const;
 const level100ArmwrestlingBaseExerciseSet = new Set<string>(LEVEL_100_ARMWRESTLING_BASE_EXERCISES);
 
 interface Level100ManualRecord {
@@ -802,6 +804,21 @@ export default function DashboardPage() {
     );
     window.localStorage.setItem(level100StatsExercisesMigrationStorageKey, "done");
   }, [isReady, level100StatsExerciseOptions, watchlistLoaded]);
+
+  useEffect(() => {
+    if (!isReady || !watchlistLoaded) {
+      return;
+    }
+
+    if (window.localStorage.getItem(level100RisingBeltCurlMigrationStorageKey)) {
+      return;
+    }
+
+    setWatchlistNames((currentNames) =>
+      dedupeWatchlist([...currentNames, ...level100RisingBeltCurlExercises])
+    );
+    window.localStorage.setItem(level100RisingBeltCurlMigrationStorageKey, "done");
+  }, [isReady, watchlistLoaded]);
 
   useEffect(() => {
     try {
