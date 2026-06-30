@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
 export function MetricCard({
   label,
   value,
@@ -10,27 +8,27 @@ export function MetricCard({
 }: {
   label: string;
   value: string | number;
-  hint: string;
+  hint?: string;
   icon?: ReactNode;
 }) {
   return (
-    <Card className="kpi-card">
-      <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-5">
-        <div className="space-y-2">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+    <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4 transition hover:border-white/[0.12] hover:bg-white/[0.04]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
             {label}
           </p>
-          <CardTitle className="text-3xl sm:text-4xl">{value}</CardTitle>
+          <p className="font-mono text-2xl font-semibold tracking-tight text-foreground">
+            {value}
+          </p>
         </div>
         {icon ? (
-          <div className="flex h-12 w-12 items-center justify-center rounded-[20px] bg-white/[0.05] text-primary">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.04] text-primary">
             {icon}
           </div>
         ) : null}
-      </CardHeader>
-      <CardContent>
-        <p className="text-sm leading-6 text-muted-foreground">{hint}</p>
-      </CardContent>
-    </Card>
+      </div>
+      {hint ? <p className="mt-2 text-xs leading-5 text-muted-foreground">{hint}</p> : null}
+    </div>
   );
 }

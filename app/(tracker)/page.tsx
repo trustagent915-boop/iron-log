@@ -372,54 +372,62 @@ function Level100CompactRow({
   return (
     <div
       className={[
-        "list-row flex items-center justify-between gap-3",
-        isSelected ? "border-primary/45 bg-primary/10" : ""
+        "group relative flex h-full flex-col gap-3 rounded-lg border bg-white/[0.025] p-3 transition",
+        isSelected
+          ? "border-primary/45 bg-primary/10"
+          : "border-white/[0.06] hover:border-white/[0.14] hover:bg-white/[0.05]"
       ].join(" ")}
     >
       <button
         type="button"
-        className="grid min-w-0 flex-1 gap-3 text-left md:grid-cols-[36px_1fr_auto]"
+        className="flex w-full flex-col gap-3 text-left"
         onClick={onSelect}
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.05] font-mono text-sm font-semibold text-muted-foreground">
-          {rank}
-        </span>
-        <div className="min-w-0 space-y-2">
-          <div>
-            <p className="truncate font-medium text-foreground">{exercise.exerciseName}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              {exercise.rule.label} - {exercise.rule.formulaLabel}
-            </p>
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/[0.06] bg-white/[0.04] font-mono text-[11px] font-semibold text-muted-foreground">
+              {rank}
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground">{exercise.exerciseName}</p>
+              <p className="truncate text-[11px] text-muted-foreground">
+                {exercise.rule.label} · {exercise.rule.formulaLabel}
+              </p>
+            </div>
           </div>
-          <div className="h-2 overflow-hidden rounded-full bg-white/[0.06]">
-            <div
-              className={`h-full rounded-full ${getLevelBarClassName(exercise.level)}`}
-              style={{ width: `${getLevelProgressPercent(exercise.level)}%` }}
-            />
-          </div>
-        </div>
-        <div className="shrink-0 text-right">
-          <div className="flex items-center justify-end gap-2">
-            <span className="data-chip">{getLevelTierLabel(exercise.level)}</span>
-            <p className={`font-mono text-3xl font-semibold ${getLevelNumberClassName(exercise.level)}`}>
-              {exercise.level}
-            </p>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {formatRecordMeta(exercise)}
+          <p
+            className={`font-mono text-2xl font-semibold leading-none ${getLevelNumberClassName(exercise.level)}`}
+          >
+            {exercise.level}
           </p>
         </div>
+
+        <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.05]">
+          <div
+            className={`h-full rounded-full ${getLevelBarClassName(exercise.level)}`}
+            style={{ width: `${getLevelProgressPercent(exercise.level)}%` }}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-2 text-[11px]">
+          <span className="rounded-full border border-white/[0.06] bg-white/[0.03] px-2 py-0.5 font-medium text-muted-foreground">
+            {getLevelTierLabel(exercise.level)}
+          </span>
+          <span className="truncate text-muted-foreground">{formatRecordMeta(exercise)}</span>
+        </div>
       </button>
-      <Button
+
+      <button
         type="button"
-        variant="ghost"
-        size="sm"
-        className="h-9 w-9 shrink-0 px-0 text-muted-foreground hover:text-destructive"
+        className="absolute right-2 top-2 hidden h-6 w-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition hover:bg-destructive/15 hover:text-destructive group-hover:opacity-100 lg:flex"
         aria-label={`Elimina ${exercise.exerciseName}`}
-        onClick={onRemove}
+        onClick={(event) => {
+          event.stopPropagation();
+          onRemove();
+        }}
       >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+        <Trash2 className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
@@ -1147,307 +1155,235 @@ export default function DashboardPage() {
   const featuredBadges = gamification.badges.slice(0, 3);
 
   return (
-    <div className="page-enter space-y-8">
-      <PageHeader
-        eyebrow="Dashboard"
-        title="Dashboard Livello 100"
-        description={`Piano attivo: ${activePlan.name}. Monitorati: Squat, Stacco, Panca, Military, Pull Up, Dips, One Arm Pull Up, Side Pressure e braccia.`}
-        actions={
-          <div className="flex flex-wrap gap-3">
-            <Button asChild variant="outline">
-              <Link href={"/custom-workout/new" as Route}>Nuovo custom workout</Link>
-            </Button>
-            <Button asChild>
-              <Link href={"/import" as Route}>Aggiorna programma</Link>
-            </Button>
+    <div className="page-enter space-y-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4 lg:col-span-1">
+          <label
+            htmlFor="level-100-bodyweight"
+            className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground"
+          >
+            Peso corporeo
+          </label>
+          <div className="mt-2 flex items-baseline gap-1">
+            <Input
+              id="level-100-bodyweight"
+              inputMode="decimal"
+              value={bodyweightInput}
+              onChange={(event) => setBodyweightInput(event.target.value)}
+              aria-label="Peso corporeo"
+              className="h-9 border-white/[0.08] bg-white/[0.03] font-mono text-lg"
+            />
+            <span className="text-sm text-muted-foreground">kg</span>
           </div>
-        }
-      />
-
-      <section className="grid gap-6 xl:grid-cols-[1.28fr_0.72fr]">
-        <Card className="overflow-hidden">
-          <div className="grid gap-0 xl:grid-cols-[1.05fr_0.95fr]">
-            <CardContent className="space-y-6 p-6 pt-6 sm:p-8 sm:pt-8">
-              <div className="space-y-3">
-                <p className="eyebrow">Dashboard Livello 100</p>
-                <h2 className="text-3xl font-semibold text-foreground sm:text-4xl">
-                  Tieni sotto controllo gli esercizi chiave e porta tutto a livello 100.
-                </h2>
-                <p className="max-w-2xl text-sm leading-7 text-muted-foreground sm:text-base">
-                  La home resta il cockpit del programma, ma ora mette davanti i record principali:
-                  target 100, massimo 130, con regole diverse per gambe, classici, braccia e corpo
-                  libero.
-                </p>
-              </div>
-
-              <div className="grid gap-3 sm:grid-cols-[160px_1fr]">
-                <div className="space-y-2">
-                  <label
-                    htmlFor="level-100-bodyweight"
-                    className="text-sm font-medium text-foreground"
-                  >
-                    Peso corporeo
-                  </label>
-                  <Input
-                    id="level-100-bodyweight"
-                    inputMode="decimal"
-                    value={bodyweightInput}
-                    onChange={(event) => setBodyweightInput(event.target.value)}
-                    aria-label="Peso corporeo"
-                  />
-                </div>
-
-                <div className="grid gap-2 sm:grid-cols-3">
-                  <div className="list-row">
-                    <p className="text-sm text-muted-foreground">Livello medio</p>
-                    <p className={`mt-1 font-mono text-2xl font-semibold ${getLevelNumberClassName(level100Summary.averageLevel)}`}>
-                      {level100Summary.averageLevel}
-                    </p>
-                  </div>
-                  <div className="list-row">
-                    <p className="text-sm text-muted-foreground">Top level</p>
-                    <p className={`mt-1 font-mono text-2xl font-semibold ${getLevelNumberClassName(level100Summary.topLevel)}`}>
-                      {level100Summary.topLevel}
-                    </p>
-                  </div>
-                  <div className="list-row">
-                    <p className="text-sm text-muted-foreground">Da configurare</p>
-                    <p className="mt-1 font-mono text-2xl font-semibold text-foreground">
-                      {pendingMetricCount}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-2">
-                <span className="data-chip">Gambe: kg / 2</span>
-                <span className="data-chip">Classici: kg x 1</span>
-                <span className="data-chip">Braccia: kg x 2</span>
-                <span className="data-chip">Corpo libero: peso + zavorra</span>
-                <span className="data-chip">Isometrie: secondi / tenuta</span>
-                <span className="data-chip">Target 100 - Max 130</span>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <Button asChild>
-                  <Link href={"/custom-workout/new" as Route}>
-                    Segna nuovo record
-                    <ArrowRight className="ml-2 h-4 w-4" />
-                  </Link>
-                </Button>
-                <Button asChild variant="outline">
-                  <Link href={"/stats" as Route}>Apri statistiche</Link>
-                </Button>
-              </div>
-            </CardContent>
-
-            <div className="panel-divider bg-white/[0.03] p-6 sm:p-8 xl:border-l xl:border-t-0">
-              <div className="space-y-4">
-                <p className="eyebrow">Esercizi principali</p>
-                <Level100ExercisePicker
-                  value={newExerciseName}
-                  exerciseOptions={availableLevel100ExerciseOptions}
-                  onChange={setNewExerciseName}
-                  onAdd={addWatchlistExercise}
-                />
-                <div className="flex flex-wrap gap-2">
-                  {level100ClassFilters.map((filter) => (
-                    <Button
-                      key={filter.id}
-                      type="button"
-                      size="sm"
-                      variant={classFilter === filter.id ? "default" : "outline"}
-                      className="gap-2"
-                      onClick={() => setClassFilter(filter.id)}
-                    >
-                      {filter.label}
-                      <span className="font-mono text-xs opacity-75">{level100FilterCounts[filter.id]}</span>
-                    </Button>
-                  ))}
-                </div>
-                <Level100Podium
-                  exercises={level100PodiumExercises}
-                  onSelect={setSelectedExerciseName}
-                />
-                <Level100CategorySummary exercises={level100FilteredExercises} />
-                <div className="flex items-center justify-between gap-3">
-                  <p className="eyebrow">Classifica completa</p>
-                  <span className="data-chip">{level100Summary.validatedCount}/{level100Summary.trackedCount} validi</span>
-                </div>
-                {!level100RankedExercises.length ? (
-                  <div className="list-row">
-                    <p className="font-medium text-foreground">Nessun esercizio in questo filtro</p>
-                    <p className="mt-2 text-sm leading-6 text-muted-foreground">
-                      Aggiungi un esercizio o passa a una categoria diversa della classifica.
-                    </p>
-                  </div>
-                ) : null}
-                <div className="space-y-3">
-                  {level100RankedExercises.map((exercise, index) => {
-                    const isSelected = exercise.exerciseName === selectedLevel100Exercise?.exerciseName;
-
-                    return (
-                      <div key={exercise.exerciseName} className="space-y-3">
-                        <Level100CompactRow
-                          exercise={exercise}
-                          rank={index + 1}
-                          isSelected={isSelected}
-                          onSelect={() => setSelectedExerciseName(exercise.exerciseName)}
-                          onRemove={() => removeWatchlistExercise(exercise.exerciseName)}
-                        />
-                        {isSelected ? (
-                          <Level100RecordDetail
-                            exercise={selectedLevel100Exercise}
-                            manualRecord={selectedManualRecord}
-                            onSave={saveManualRecord}
-                            onClear={clearManualRecord}
-                            canSave={syncStatus.canWrite}
-                            syncMessage={syncStatus.message}
-                          />
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </Card>
-
-        <div className="grid gap-6">
-          <Card>
-            <CardHeader>
-              <p className="eyebrow">Progress ladder</p>
-              <CardTitle className="text-2xl">
-                La tua progressione resta leggibile anche nel lungo periodo
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 text-sm leading-7 text-muted-foreground">
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium text-foreground">Livello {gamification.level}</p>
-                  <span className="data-chip">
-                    {gamification.xpIntoLevel}/{gamification.xpForNextLevel} XP
-                  </span>
-                </div>
-                <Progress value={gamification.levelProgress} />
-                <p>
-                  Ogni log salva volume, stato sessione e PR in modo persistente e li trasforma
-                  in avanzamento reale.
-                </p>
-              </div>
-              <div className="list-row">
-                <p className="font-medium text-foreground">Streak attuale</p>
-                <p>
-                  {gamification.currentWeekStreak} settimane attive di fila, massimo storico{" "}
-                  {gamification.longestWeekStreak}.
-                </p>
-              </div>
-              <div className="list-row">
-                <p className="font-medium text-foreground">Record personali</p>
-                <p>
-                  {gamification.recordBreakCount} PR rotti nel tempo e {unlockedBadges.length}{" "}
-                  badge gia sbloccati.
-                </p>
-              </div>
-              <div className="list-row">
-                <p className="font-medium text-foreground">Focus ricorrente</p>
-                <p>{frequentExercise ?? "Ancora nessun esercizio ricorrente rilevato"}.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {featuredBadges.map((badge) => (
-                  <span key={badge.id} className="data-chip">
-                    {badge.title}: {badge.unlocked ? "sbloccato" : `${badge.current}/${badge.target}`}
-                  </span>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-start justify-between gap-3">
-              <div>
-                <p className="eyebrow">Azioni rapide</p>
-                <CardTitle className="mt-3 text-2xl">Non perdere il ritmo</CardTitle>
-              </div>
-              <Sparkles className="h-5 w-5 text-primary" />
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button asChild className="w-full justify-between">
-                <Link href={"/custom-workout/new" as Route}>
-                  Aggiungi un workout extra
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full justify-between">
-                <Link href={"/stats" as Route}>
-                  Controlla la progressione
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="w-full justify-between">
-                <Link href={"/history" as Route}>
-                  Rivedi le sessioni salvate
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
         </div>
-      </section>
-
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
-          label="Sessioni completate"
-          value={`${completedSessions}/${plannedSessions.length || 0}`}
-          hint="Ritmo del piano attivo, senza mescolare le sedute extra."
-          icon={<Trophy className="h-5 w-5" />}
+          label="Livello medio"
+          value={level100Summary.averageLevel}
+          hint="Media sugli esercizi validati."
+          icon={<Medal className="h-4 w-4" />}
         />
         <MetricCard
-          label="Volume settimanale"
-          value={formatVolume(weeklyVolume)}
-          hint="Somma sets x reps x peso registrata nella settimana corrente."
-          icon={<Weight className="h-5 w-5" />}
+          label="Top level"
+          value={level100Summary.topLevel}
+          hint="Miglior livello raggiunto."
+          icon={<Trophy className="h-4 w-4" />}
         />
         <MetricCard
-          label="Livello 100"
+          label="Validati"
           value={`${level100Summary.validatedCount}/${level100Summary.trackedCount}`}
-          hint="Esercizi con almeno un record valido nella nuova dashboard."
-          icon={<Medal className="h-5 w-5" />}
+          hint="Con almeno un record valido."
+          icon={<BadgeCheck className="h-4 w-4" />}
         />
         <MetricCard
-          label="Badge sbloccati"
-          value={unlockedBadges.length}
-          hint="Milestone guadagnate restando costante tra programma e workout extra."
-          icon={<BadgeCheck className="h-5 w-5" />}
+          label="Volume settimana"
+          value={formatVolume(weeklyVolume)}
+          hint={`${completedSessions}/${plannedSessions.length || 0} sessioni completate`}
+          icon={<Weight className="h-4 w-4" />}
         />
       </div>
 
-      <section className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-        <Card>
-          <CardHeader className="flex flex-row items-start justify-between gap-3">
-            <div>
-              <p className="eyebrow">Attivita recente</p>
-              <CardTitle className="mt-3 text-2xl">Ultimi log salvati</CardTitle>
+      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+        <div className="space-y-4">
+          <div className="surface p-4">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Filtra categoria
+              </p>
+              <span className="ml-auto text-xs text-muted-foreground">
+                {level100RankedExercises.length} esercizi mostrati
+              </span>
             </div>
-            <History className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-1.5">
+              {level100ClassFilters.map((filter) => (
+                <button
+                  key={filter.id}
+                  type="button"
+                  onClick={() => setClassFilter(filter.id)}
+                  className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-medium transition ${
+                    classFilter === filter.id
+                      ? "border-primary/40 bg-primary/15 text-foreground"
+                      : "border-white/[0.06] bg-white/[0.02] text-muted-foreground hover:border-white/[0.12] hover:text-foreground"
+                  }`}
+                >
+                  {filter.label}
+                  <span className="font-mono opacity-70">{level100FilterCounts[filter.id]}</span>
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 border-t border-white/[0.06] pt-3">
+              <Level100ExercisePicker
+                value={newExerciseName}
+                exerciseOptions={availableLevel100ExerciseOptions}
+                onChange={setNewExerciseName}
+                onAdd={addWatchlistExercise}
+              />
+            </div>
+          </div>
+
+          {!level100RankedExercises.length ? (
+            <div className="surface p-6 text-center">
+              <p className="text-sm font-medium text-foreground">
+                Nessun esercizio in questa categoria
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Aggiungine uno con il selettore qui sopra o passa a un&apos;altra categoria.
+              </p>
+            </div>
+          ) : (
+            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+              {level100RankedExercises.map((exercise, index) => {
+                const isSelected =
+                  exercise.exerciseName === selectedLevel100Exercise?.exerciseName;
+
+                return (
+                  <Level100CompactRow
+                    key={exercise.exerciseName}
+                    exercise={exercise}
+                    rank={index + 1}
+                    isSelected={isSelected}
+                    onSelect={() => setSelectedExerciseName(exercise.exerciseName)}
+                    onRemove={() => removeWatchlistExercise(exercise.exerciseName)}
+                  />
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <aside className="space-y-4 lg:sticky lg:top-[4.5rem] lg:self-start">
+          {selectedLevel100Exercise ? (
+            <Level100RecordDetail
+              exercise={selectedLevel100Exercise}
+              manualRecord={selectedManualRecord}
+              onSave={saveManualRecord}
+              onClear={clearManualRecord}
+              canSave={syncStatus.canWrite}
+              syncMessage={syncStatus.message}
+            />
+          ) : (
+            <div className="surface p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Dettaglio esercizio
+              </p>
+              <p className="mt-2 text-sm text-foreground">
+                Clicca un esercizio a sinistra per vederne il record, la regola di calcolo e
+                segnare un nuovo PR.
+              </p>
+              <div className="mt-3 flex flex-col gap-1.5 text-[11px] text-muted-foreground">
+                <span><span className="font-mono text-foreground">Gambe</span> · kg / 2</span>
+                <span><span className="font-mono text-foreground">Classici</span> · kg × 1</span>
+                <span><span className="font-mono text-foreground">Braccia</span> · kg × 2</span>
+                <span><span className="font-mono text-foreground">Corpo libero</span> · (peso + zavorra) / 2</span>
+                <span><span className="font-mono text-foreground">Isometria</span> · ≥ 10s · peso + zavorra</span>
+              </div>
+            </div>
+          )}
+
+          <div className="surface p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Progressione globale
+              </p>
+              <span className="font-mono text-xs text-foreground">
+                Lv {gamification.level}
+              </span>
+            </div>
+            <Progress value={gamification.levelProgress} />
+            <p className="mt-2 text-[11px] text-muted-foreground">
+              {gamification.xpIntoLevel}/{gamification.xpForNextLevel} XP · Streak{" "}
+              {gamification.currentWeekStreak} sett. · PR {gamification.recordBreakCount}
+            </p>
+          </div>
+
+          <div className="surface p-4">
+            <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Azioni rapide
+            </p>
+            <div className="space-y-1.5">
+              <Button asChild size="sm" className="w-full justify-between">
+                <Link href={"/custom-workout/new" as Route}>
+                  Segna nuovo record
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+              <Button asChild size="sm" variant="outline" className="w-full justify-between">
+                <Link href={"/stats" as Route}>
+                  Statistiche
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+              <Button asChild size="sm" variant="outline" className="w-full justify-between">
+                <Link href={"/history" as Route}>
+                  Storico
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      {level100PodiumExercises.length ? (
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Podio attuale · {level100FilteredExercises[0]?.rule.label ?? "Tutti"}
+            </p>
+            <span className="text-xs text-muted-foreground">Top 3 del filtro corrente</span>
+          </div>
+          <Level100Podium
+            exercises={level100PodiumExercises}
+            onSelect={setSelectedExerciseName}
+          />
+        </section>
+      ) : null}
+
+      <Level100CategorySummary exercises={level100FilteredExercises} />
+
+      <section className="grid gap-4 lg:grid-cols-2">
+        <div className="surface p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Ultimi log
+            </p>
+            <History className="h-3.5 w-3.5 text-muted-foreground" />
+          </div>
+          <div className="space-y-1.5">
             {recentHistory.length ? (
               recentHistory.map((entry) => (
                 <Link
                   key={entry.log.id}
                   href={(entry.session ? `/history/${entry.session.id}` : "/history") as Route}
-                  className="list-row flex items-start justify-between gap-4"
+                  className="flex items-start justify-between gap-3 rounded-md border border-white/[0.06] bg-white/[0.02] p-2.5 transition hover:border-white/[0.12] hover:bg-white/[0.04]"
                 >
-                  <div className="space-y-1">
-                    <p className="font-medium text-foreground">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">
                       {formatDateLabel(entry.log.performedDate)}
                     </p>
-                    <p className="text-sm text-muted-foreground">
-                      {entry.session?.dayLabel ?? "Seduta registrata"} - {entry.exerciseNames.length} esercizi
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      {entry.session?.dayLabel ?? "Seduta"} · {entry.exerciseNames.length} esercizi
                     </p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="truncate text-[11px] text-muted-foreground">
                       {entry.exerciseNames.join(", ")}
                     </p>
                   </div>
@@ -1455,36 +1391,37 @@ export default function DashboardPage() {
                 </Link>
               ))
             ) : (
-              <div className="list-row">
-                <p className="text-sm leading-7 text-muted-foreground">
-                  Non ci sono ancora allenamenti registrati. Appena salvi il primo log, qui trovi
-                  il riepilogo rapido.
-                </p>
-              </div>
+              <p className="rounded-md border border-white/[0.06] bg-white/[0.02] p-3 text-xs text-muted-foreground">
+                Nessun allenamento registrato. Il primo log apparirà qui.
+              </p>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="flex flex-row items-start justify-between gap-3">
-            <div>
-              <p className="eyebrow">Timeline vicina</p>
-              <CardTitle className="mt-3 text-2xl">Le prossime sessioni in agenda</CardTitle>
-            </div>
-            <Target className="h-5 w-5 text-muted-foreground" />
-          </CardHeader>
-          <CardContent className="space-y-3">
+        <div className="surface p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Prossime sessioni
+            </p>
+            <Target className="h-3.5 w-3.5 text-muted-foreground" />
+          </div>
+          <div className="space-y-1.5">
             {nextSessions.length ? (
               nextSessions.map((session) => (
-                <div key={session.id} className="list-row space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="font-medium text-foreground">
+                <div
+                  key={session.id}
+                  className="rounded-md border border-white/[0.06] bg-white/[0.02] p-2.5"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="truncate text-sm font-medium text-foreground">
                       {session.dayLabel ?? formatDateLabel(session.sessionDate)}
                     </p>
-                    <span className="data-chip">{formatDateLabel(session.sessionDate, "d MMM")}</span>
+                    <span className="font-mono text-[11px] text-muted-foreground">
+                      {formatDateLabel(session.sessionDate, "d MMM")}
+                    </span>
                   </div>
-                  <p className="text-sm text-muted-foreground">
-                    {session.exercises.length} esercizi pronti -{" "}
+                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                    {session.exercises.length} esercizi ·{" "}
                     {session.exercises
                       .slice(0, 2)
                       .map((exercise) => exercise.exerciseName)
@@ -1493,18 +1430,17 @@ export default function DashboardPage() {
                 </div>
               ))
             ) : (
-              <div className="list-row space-y-3">
-                <p className="text-sm leading-7 text-muted-foreground">
-                  Nessuna sessione futura individuata nel piano. Se oggi vuoi allenarti comunque,
-                  crea un custom workout e tienilo nello stesso storico.
+              <div className="space-y-2 rounded-md border border-white/[0.06] bg-white/[0.02] p-3">
+                <p className="text-xs text-muted-foreground">
+                  Nessuna sessione programmata. Aggiungi un workout extra.
                 </p>
-                <Button asChild variant="outline">
+                <Button asChild size="sm" variant="outline" className="w-full">
                   <Link href={"/custom-workout/new" as Route}>Crea sessione extra</Link>
                 </Button>
               </div>
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </section>
     </div>
   );
