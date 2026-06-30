@@ -3,7 +3,7 @@
 import { Cloud, DatabaseBackup, ShieldAlert } from "lucide-react";
 import Link from "next/link";
 import type { Route } from "next";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
@@ -15,11 +15,75 @@ import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { getHistoryEntries, getLastWorkoutDate, formatDateLabel } from "@/lib/arm-tracker/selectors";
 import { exportArmTrackerLocalBackups } from "@/lib/arm-tracker/storage";
 
+interface HealthResponse {
+  configured: boolean;
+  counts?: {
+    plans: number;
+    sessions: number;
+    exercises: number;
+    workoutLogs: number;
+    exerciseLogs: number;
+    importRuns: number;
+  };
+  watchlistCount?: number;
+  tombstoneCounts?: {
+    workoutLogs: number;
+    exerciseLogs: number;
+    [key: string]: number;
+  };
+  seedVersion?: string | null;
+  updatedAt?: string | null;
+  versionsCount?: number | null;
+  error?: string;
+}
+
 export default function SyncPage() {
   const { data, exportArchive, isReady, syncStatus } = useArmTracker();
   const [tokenInput, setTokenInput] = useState("");
   const [tokenMessage, setTokenMessage] = useState<string | null>(null);
   const [isSavingToken, setIsSavingToken] = useState(false);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [healthError, setHealthError] = useState<string | null>(null);
+  const [healthLoading, setHealthLoading] = useState(false);
+
+  useEffect(() => {
+    if (!isReady || !syncStatus.canWrite) {
+      setHealth(null);
+      return;
+    }
+
+    const abortController = new AbortController();
+    setHealthLoading(true);
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/arm-tracker/health", {
+          cache: "no-store",
+          signal: abortController.signal
+        });
+
+        if (!response.ok) {
+          throw new Error(`Health check non disponibile (${response.status}).`);
+        }
+
+        const payload = (await response.json()) as HealthResponse;
+        setHealth(payload);
+        setHealthError(null);
+      } catch (error) {
+        if ((error as Error).name === "AbortError") {
+          return;
+        }
+        setHealthError(
+          error instanceof Error ? error.message : "Health check non disponibile."
+        );
+        setHealth(null);
+      } finally {
+        setHealthLoading(false);
+      }
+    })();
+
+    return () => abortController.abort();
+  }, [isReady, syncStatus.canWrite]);
 
   if (!isReady) {
     return <LoadingPanel message="Controllo stato cloud..." />;
@@ -168,15 +232,95 @@ export default function SyncPage() {
           </CardContent>
         </Card>
       ) : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Cloud pronto</CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm leading-7 text-muted-foreground">
-            I salvataggi sono abilitati. Il prossimo passaggio e migrare definitivamente workout,
-            record Livello 100 e import nel modello relazionale Supabase.
-          </CardContent>
-        </Card>
+        <>
+          <Card>
+            <CardHeader>
+              <CardTitle>Cloud pronto</CardTitle>
+            </CardHeader>
+            <CardContent className="text-sm leading-7 text-muted-foreground">
+              I salvataggi sono abilitati. Lo snapshot JSON in
+              <code className="mx-1 rounded bg-white/[0.05] px-1 py-0.5 font-mono text-xs">
+                arm_tracker_snapshots
+              </code>
+              e l&apos;unica fonte di verita tra i dispositivi: ogni overwrite viene
+              versionato in
+              <code className="mx-1 rounded bg-white/[0.05] px-1 py-0.5 font-mono text-xs">
+                arm_tracker_snapshot_versions
+              </code>
+              prima di essere applicato.
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <CardTitle>Stato dati lato cloud</CardTitle>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Conteggi letti direttamente da Supabase. Confronta con i conteggi locali per
+                  verificare che ogni dispositivo veda gli stessi dati.
+                </p>
+              </div>
+              {health?.updatedAt ? (
+                <span className="font-mono text-[11px] text-muted-foreground">
+                  ultimo write{" "}
+                  {formatDateLabel(health.updatedAt.slice(0, 10), "d MMM yyyy")}
+                </span>
+              ) : null}
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {healthLoading && !health ? (
+                <p className="text-sm text-muted-foreground">Sto interrogando il cloud...</p>
+              ) : null}
+              {healthError ? (
+                <p className="text-sm text-destructive">{healthError}</p>
+              ) : null}
+              {health?.counts ? (
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <MetricCard
+                    label="Workout cloud"
+                    value={health.counts.workoutLogs}
+                    hint={`Locali: ${data.workoutLogs.length}${
+                      health.counts.workoutLogs !== data.workoutLogs.length
+                        ? " · differiscono"
+                        : ""
+                    }`}
+                    icon={<Cloud className="h-4 w-4" />}
+                  />
+                  <MetricCard
+                    label="Esercizi log"
+                    value={health.counts.exerciseLogs}
+                    hint={`Locali: ${data.exerciseLogs.length}`}
+                    icon={<Cloud className="h-4 w-4" />}
+                  />
+                  <MetricCard
+                    label="Programmi"
+                    value={health.counts.plans}
+                    hint={`Locali: ${data.plans.length}`}
+                    icon={<DatabaseBackup className="h-4 w-4" />}
+                  />
+                  <MetricCard
+                    label="Watchlist L100"
+                    value={health.watchlistCount ?? 0}
+                    hint={`Locale: ${data.level100Watchlist.length}`}
+                    icon={<ShieldAlert className="h-4 w-4" />}
+                  />
+                  <MetricCard
+                    label="Tombstones workout"
+                    value={health.tombstoneCounts?.workoutLogs ?? 0}
+                    hint="Delete propagate via cloud."
+                    icon={<DatabaseBackup className="h-4 w-4" />}
+                  />
+                  <MetricCard
+                    label="Versioni snapshot"
+                    value={health.versionsCount ?? "-"}
+                    hint="Stato recuperabile da arm_tracker_snapshot_versions."
+                    icon={<DatabaseBackup className="h-4 w-4" />}
+                  />
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        </>
       )}
     </div>
   );
