@@ -26,8 +26,23 @@ interface ExerciseDraft {
   actualSets: string;
   actualReps: string;
   actualWeight: string;
+  actualSeconds: string;
   notes: string;
   skipped: boolean;
+}
+
+function isIsometryExerciseName(name: string) {
+  const normalized = name.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return (
+    normalized.includes("iso") ||
+    normalized.includes("hold") ||
+    normalized.includes("front lever") ||
+    normalized.includes("back lever") ||
+    normalized.includes("planche") ||
+    normalized.includes("l sit") ||
+    normalized.includes("l-sit") ||
+    normalized.includes("handstand")
+  );
 }
 
 function toFieldValue(value: number | null) {
@@ -72,6 +87,7 @@ export default function LogWorkoutPage() {
           actualSets: toFieldValue(existingExerciseLog?.actualSets ?? null),
           actualReps: toFieldValue(existingExerciseLog?.actualReps ?? null),
           actualWeight: toFieldValue(existingExerciseLog?.actualWeight ?? null),
+          actualSeconds: toFieldValue(existingExerciseLog?.actualSeconds ?? null),
           notes: stripSkippedToken(existingExerciseLog?.notes ?? null) ?? "",
           skipped: existingExerciseLog ? isSkippedExerciseLog(existingExerciseLog) : false
         };
@@ -130,6 +146,7 @@ export default function LogWorkoutPage() {
             actualSets: parseInputNumber(draft?.actualSets ?? ""),
             actualReps: parseInputNumber(draft?.actualReps ?? ""),
             actualWeight: parseInputNumber(draft?.actualWeight ?? ""),
+            actualSeconds: parseInputNumber(draft?.actualSeconds ?? ""),
             notes: draft?.notes ?? "",
             skipped: draft?.skipped ?? false
           };
@@ -228,9 +245,11 @@ export default function LogWorkoutPage() {
             actualSets: "",
             actualReps: "",
             actualWeight: "",
+            actualSeconds: "",
             notes: "",
             skipped: false
           };
+          const showSecondsField = isIsometryExerciseName(draft.exerciseName ?? exercise.exerciseName);
 
           return (
             <Card key={exercise.id}>
@@ -278,7 +297,11 @@ export default function LogWorkoutPage() {
                     disabled={draft.skipped}
                   />
                 </div>
-                <div className="grid gap-4 md:grid-cols-3">
+                <div
+                  className={`grid gap-4 ${
+                    showSecondsField ? "md:grid-cols-4" : "md:grid-cols-3"
+                  }`}
+                >
                   <div className="space-y-2">
                     <label
                       htmlFor={`actual-sets-${exercise.id}`}
@@ -333,6 +356,27 @@ export default function LogWorkoutPage() {
                       disabled={draft.skipped}
                     />
                   </div>
+                  {showSecondsField ? (
+                    <div className="space-y-2">
+                      <label
+                        htmlFor={`actual-seconds-${exercise.id}`}
+                        className="text-sm font-medium text-foreground"
+                      >
+                        Secondi tenuta
+                      </label>
+                      <Input
+                        id={`actual-seconds-${exercise.id}`}
+                        name={`actual-seconds-${exercise.id}`}
+                        inputMode="decimal"
+                        value={draft.actualSeconds}
+                        onChange={(event) =>
+                          updateDraft(exercise.id, { actualSeconds: event.target.value })
+                        }
+                        disabled={draft.skipped}
+                        placeholder="min 10s per record"
+                      />
+                    </div>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <label

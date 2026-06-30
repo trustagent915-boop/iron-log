@@ -4,6 +4,7 @@ import type {
   ArmTrackerArchiveImportResult,
   ArmTrackerData,
   ArmTrackerDataCounts,
+  ArmTrackerDeletedIds,
   ImportRun,
   Plan,
   PlanExercise,
@@ -12,7 +13,8 @@ import type {
   WorkoutLog
 } from "@/lib/arm-tracker/types";
 
-const currentSchemaVersion = 2;
+const currentSchemaVersion = 3;
+const maxDeletedIdsPerCollection = 1000;
 
 const storageKeys = {
   root: "iron_log_db_v2",
@@ -211,9 +213,75 @@ function normalizeExerciseLog(
     actualWeight: asNullableNumber(raw.actualWeight),
     actualReps: asNullableNumber(raw.actualReps),
     actualSets: asNullableNumber(raw.actualSets),
+    actualSeconds: asNullableNumber(raw.actualSeconds),
     notes: asNullableString(raw.notes),
     performedOrder: asNumber(raw.performedOrder)
   };
+}
+
+function normalizeStringArray(raw: unknown): string[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of raw) {
+    if (typeof value !== "string") {
+      continue;
+    }
+
+    const trimmed = value.trim();
+
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+
+  return result;
+}
+
+function normalizeDeletedIds(raw: unknown): ArmTrackerDeletedIds {
+  const empty: ArmTrackerDeletedIds = {
+    plans: [],
+    sessions: [],
+    exercises: [],
+    workoutLogs: [],
+    exerciseLogs: [],
+    importRuns: []
+  };
+
+  if (!isRecord(raw)) {
+    return empty;
+  }
+
+  return {
+    plans: capDeletedIds(normalizeStringArray(raw.plans)),
+    sessions: capDeletedIds(normalizeStringArray(raw.sessions)),
+    exercises: capDeletedIds(normalizeStringArray(raw.exercises)),
+    workoutLogs: capDeletedIds(normalizeStringArray(raw.workoutLogs)),
+    exerciseLogs: capDeletedIds(normalizeStringArray(raw.exerciseLogs)),
+    importRuns: capDeletedIds(normalizeStringArray(raw.importRuns))
+  };
+}
+
+function capDeletedIds(ids: string[]): string[] {
+  if (ids.length <= maxDeletedIdsPerCollection) {
+    return ids;
+  }
+  return ids.slice(-maxDeletedIdsPerCollection);
+}
+
+function dropDeletedItems<T extends { id: string }>(items: T[], deletedIds: string[]): T[] {
+  if (!deletedIds.length) {
+    return items;
+  }
+  const deleted = new Set(deletedIds);
+  return items.filter((item) => !deleted.has(item.id));
 }
 
 function normalizeActivePlanStatuses(plans: Plan[]) {
@@ -229,37 +297,57 @@ function normalizeActivePlanStatuses(plans: Plan[]) {
 }
 
 function normalizeSnapshot(rawSnapshot: Partial<ArmTrackerData> | null | undefined): ArmTrackerData {
-  const plans = dedupeById(
-    (Array.isArray(rawSnapshot?.plans) ? rawSnapshot.plans : [])
-      .map(normalizePlan)
-      .filter((plan): plan is Plan => Boolean(plan))
+  const deletedIds = normalizeDeletedIds(rawSnapshot?.deletedIds);
+  const plans = dropDeletedItems(
+    dedupeById(
+      (Array.isArray(rawSnapshot?.plans) ? rawSnapshot.plans : [])
+        .map(normalizePlan)
+        .filter((plan): plan is Plan => Boolean(plan))
+    ),
+    deletedIds.plans
   );
-  const sessions = dedupeById(
-    (Array.isArray(rawSnapshot?.sessions) ? rawSnapshot.sessions : [])
-      .map(normalizeSession)
-      .filter((session): session is PlanSession => Boolean(session))
+  const sessions = dropDeletedItems(
+    dedupeById(
+      (Array.isArray(rawSnapshot?.sessions) ? rawSnapshot.sessions : [])
+        .map(normalizeSession)
+        .filter((session): session is PlanSession => Boolean(session))
+    ),
+    deletedIds.sessions
   );
-  const exercises = dedupeById(
-    (Array.isArray(rawSnapshot?.exercises) ? rawSnapshot.exercises : [])
-      .map(normalizeExercise)
-      .filter((exercise): exercise is PlanExercise => Boolean(exercise))
+  const exercises = dropDeletedItems(
+    dedupeById(
+      (Array.isArray(rawSnapshot?.exercises) ? rawSnapshot.exercises : [])
+        .map(normalizeExercise)
+        .filter((exercise): exercise is PlanExercise => Boolean(exercise))
+    ),
+    deletedIds.exercises
   );
-  const workoutLogs = dedupeById(
-    (Array.isArray(rawSnapshot?.workoutLogs) ? rawSnapshot.workoutLogs : [])
-      .map(normalizeWorkoutLog)
-      .filter((log): log is WorkoutLog => Boolean(log))
+  const workoutLogs = dropDeletedItems(
+    dedupeById(
+      (Array.isArray(rawSnapshot?.workoutLogs) ? rawSnapshot.workoutLogs : [])
+        .map(normalizeWorkoutLog)
+        .filter((log): log is WorkoutLog => Boolean(log))
+    ),
+    deletedIds.workoutLogs
   );
-  const importRuns = dedupeById(
-    (Array.isArray(rawSnapshot?.importRuns) ? rawSnapshot.importRuns : [])
-      .map(normalizeImportRun)
-      .filter((run): run is ImportRun => Boolean(run))
+  const importRuns = dropDeletedItems(
+    dedupeById(
+      (Array.isArray(rawSnapshot?.importRuns) ? rawSnapshot.importRuns : [])
+        .map(normalizeImportRun)
+        .filter((run): run is ImportRun => Boolean(run))
+    ),
+    deletedIds.importRuns
   );
   const exerciseMap = new Map(exercises.map((exercise) => [exercise.id, exercise]));
-  const exerciseLogs = dedupeById(
-    (Array.isArray(rawSnapshot?.exerciseLogs) ? rawSnapshot.exerciseLogs : [])
-      .map((exerciseLog) => normalizeExerciseLog(exerciseLog, exerciseMap))
-      .filter((exerciseLog): exerciseLog is WorkoutExerciseLog => Boolean(exerciseLog))
+  const exerciseLogs = dropDeletedItems(
+    dedupeById(
+      (Array.isArray(rawSnapshot?.exerciseLogs) ? rawSnapshot.exerciseLogs : [])
+        .map((exerciseLog) => normalizeExerciseLog(exerciseLog, exerciseMap))
+        .filter((exerciseLog): exerciseLog is WorkoutExerciseLog => Boolean(exerciseLog))
+    ),
+    deletedIds.exerciseLogs
   );
+  const level100Watchlist = normalizeStringArray(rawSnapshot?.level100Watchlist);
 
   return {
     plans: normalizeActivePlanStatuses(plans),
@@ -267,7 +355,9 @@ function normalizeSnapshot(rawSnapshot: Partial<ArmTrackerData> | null | undefin
     exercises,
     workoutLogs,
     exerciseLogs,
-    importRuns
+    importRuns,
+    level100Watchlist,
+    deletedIds
   };
 }
 
@@ -396,16 +486,57 @@ function mergeById<T extends { id: string }>(current: T[], incoming: T[]) {
   return [...mergedMap.values()];
 }
 
+function mergeStringArrays(current: string[], incoming: string[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of [...current, ...incoming]) {
+    if (typeof value !== "string") {
+      continue;
+    }
+    const trimmed = value.trim();
+    if (!trimmed || seen.has(trimmed)) {
+      continue;
+    }
+    seen.add(trimmed);
+    result.push(trimmed);
+  }
+
+  return result;
+}
+
+function mergeDeletedIds(
+  current: ArmTrackerDeletedIds,
+  incoming: ArmTrackerDeletedIds
+): ArmTrackerDeletedIds {
+  return {
+    plans: capDeletedIds(mergeStringArrays(current.plans, incoming.plans)),
+    sessions: capDeletedIds(mergeStringArrays(current.sessions, incoming.sessions)),
+    exercises: capDeletedIds(mergeStringArrays(current.exercises, incoming.exercises)),
+    workoutLogs: capDeletedIds(mergeStringArrays(current.workoutLogs, incoming.workoutLogs)),
+    exerciseLogs: capDeletedIds(mergeStringArrays(current.exerciseLogs, incoming.exerciseLogs)),
+    importRuns: capDeletedIds(mergeStringArrays(current.importRuns, incoming.importRuns))
+  };
+}
+
 function mergeSnapshots(current: ArmTrackerData, incoming: ArmTrackerData) {
+  const deletedIds = mergeDeletedIds(current.deletedIds, incoming.deletedIds);
+  const level100Watchlist =
+    incoming.level100Watchlist.length > 0 ? incoming.level100Watchlist : current.level100Watchlist;
+
   return normalizeSnapshot({
     plans: mergeById(current.plans, incoming.plans),
     sessions: mergeById(current.sessions, incoming.sessions),
     exercises: mergeById(current.exercises, incoming.exercises),
     workoutLogs: mergeById(current.workoutLogs, incoming.workoutLogs),
     exerciseLogs: mergeById(current.exerciseLogs, incoming.exerciseLogs),
-    importRuns: mergeById(current.importRuns, incoming.importRuns)
+    importRuns: mergeById(current.importRuns, incoming.importRuns),
+    level100Watchlist,
+    deletedIds
   });
 }
+
+export const mergeArmTrackerSnapshots = mergeSnapshots;
 
 export function createEmptyArmTrackerData(): ArmTrackerData {
   return {
@@ -414,7 +545,16 @@ export function createEmptyArmTrackerData(): ArmTrackerData {
     exercises: [],
     workoutLogs: [],
     exerciseLogs: [],
-    importRuns: []
+    importRuns: [],
+    level100Watchlist: [],
+    deletedIds: {
+      plans: [],
+      sessions: [],
+      exercises: [],
+      workoutLogs: [],
+      exerciseLogs: [],
+      importRuns: []
+    }
   };
 }
 

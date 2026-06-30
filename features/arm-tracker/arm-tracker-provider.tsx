@@ -9,7 +9,13 @@ import {
   type ReactNode
 } from "react";
 
-import { createCustomSession, importParsedPlan, saveWorkoutLogEntry } from "@/lib/arm-tracker/mutations";
+import {
+  addWatchlistExerciseMutation,
+  createCustomSession,
+  importParsedPlan,
+  removeWatchlistExerciseMutation,
+  saveWorkoutLogEntry
+} from "@/lib/arm-tracker/mutations";
 import { applyCompetitionPrepProgram } from "@/lib/arm-tracker/competition-prep-program";
 import { fetchRemoteSnapshot, importRemoteArchive, pushRemoteSnapshot } from "@/lib/arm-tracker/remote-sync";
 import { getActivePlan, getSessionDetails } from "@/lib/arm-tracker/selectors";
@@ -19,7 +25,8 @@ import {
   db,
   exportArmTrackerArchive,
   getDataCounts,
-  hasStoredArmTrackerData
+  hasStoredArmTrackerData,
+  mergeArmTrackerSnapshots
 } from "@/lib/arm-tracker/storage";
 import type {
   ArmTrackerData,
@@ -45,6 +52,8 @@ interface ArmTrackerContextValue {
   exportArchive: () => ArmTrackerArchiveExport;
   importArchive: (file: File) => Promise<ArmTrackerArchiveImportResult>;
   findSessionDetails: (sessionId: string) => SessionDetails | null;
+  addWatchlistExercise: (exerciseName: string) => Promise<void>;
+  removeWatchlistExercise: (exerciseName: string) => Promise<void>;
 }
 
 export interface ArmTrackerSyncStatus {
@@ -129,8 +138,20 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
             Object.values(localCounts).reduce((sum, value) => sum + value, 0);
 
         if (remoteHasData && (!localHasData || remoteLooksRicher)) {
-          lastSyncedPayloadRef.current = JSON.stringify(remote.snapshot);
-          db.setSnapshot(remote.snapshot!);
+          const mergedSnapshot = mergeArmTrackerSnapshots(localSnapshot, remote.snapshot!);
+          db.setSnapshot(mergedSnapshot);
+
+          if (JSON.stringify(mergedSnapshot) !== JSON.stringify(remote.snapshot)) {
+            const pushed = await pushRemoteSnapshot({
+              snapshot: mergedSnapshot,
+              seedVersion: remote.seedVersion ?? db.getSeedVersion(),
+              signal: abortController.signal
+            });
+            lastSyncedPayloadRef.current = JSON.stringify(pushed.snapshot ?? mergedSnapshot);
+          } else {
+            lastSyncedPayloadRef.current = JSON.stringify(remote.snapshot);
+          }
+
           setSyncStatus(syncReadyStatus);
 
           if (remote.seedVersion?.trim()) {
@@ -284,6 +305,14 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
     return commitMutationToCloud(() => saveWorkoutLogEntry(input));
   }
 
+  async function addWatchlistExercise(exerciseName: string) {
+    await commitMutationToCloud(() => addWatchlistExerciseMutation(exerciseName));
+  }
+
+  async function removeWatchlistExercise(exerciseName: string) {
+    await commitMutationToCloud(() => removeWatchlistExerciseMutation(exerciseName));
+  }
+
   function exportArchive() {
     return exportArmTrackerArchive(data);
   }
@@ -329,7 +358,9 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
         saveWorkoutLog,
         exportArchive,
         importArchive,
-        findSessionDetails
+        findSessionDetails,
+        addWatchlistExercise,
+        removeWatchlistExercise
       }}
     >
       {children}
