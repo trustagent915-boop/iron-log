@@ -12,6 +12,7 @@ import {
 import {
   addWatchlistExerciseMutation,
   createCustomSession,
+  deleteWorkoutLogMutation,
   importParsedPlan,
   removeWatchlistExerciseMutation,
   saveWorkoutLogEntry
@@ -54,6 +55,7 @@ interface ArmTrackerContextValue {
   findSessionDetails: (sessionId: string) => SessionDetails | null;
   addWatchlistExercise: (exerciseName: string) => Promise<void>;
   removeWatchlistExercise: (exerciseName: string) => Promise<void>;
+  deleteWorkoutLog: (workoutLogId: string) => Promise<void>;
 }
 
 export interface ArmTrackerSyncStatus {
@@ -313,6 +315,10 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
     await commitMutationToCloud(() => removeWatchlistExerciseMutation(exerciseName));
   }
 
+  async function deleteWorkoutLog(workoutLogId: string) {
+    await commitMutationToCloud(() => deleteWorkoutLogMutation(workoutLogId));
+  }
+
   function exportArchive() {
     return exportArmTrackerArchive(data);
   }
@@ -360,7 +366,8 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
         importArchive,
         findSessionDetails,
         addWatchlistExercise,
-        removeWatchlistExercise
+        removeWatchlistExercise,
+        deleteWorkoutLog
       }}
     >
       {children}
