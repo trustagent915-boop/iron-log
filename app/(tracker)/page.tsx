@@ -734,16 +734,26 @@ function Level100RecordDetail({
 }
 
 export default function DashboardPage() {
-  const { data, activePlan, isReady, syncStatus } = useArmTracker();
+  const {
+    data,
+    activePlan,
+    isReady,
+    syncStatus,
+    addWatchlistExercise: addWatchlistExerciseRemote,
+    removeWatchlistExercise: removeWatchlistExerciseRemote
+  } = useArmTracker();
   const [bodyweightInput, setBodyweightInput] = useState("90");
-  const [watchlistNames, setWatchlistNames] = useState<string[]>(() =>
-    dedupeWatchlist(LEVEL_100_TARGET_EXERCISES)
-  );
   const [newExerciseName, setNewExerciseName] = useState("");
-  const [selectedExerciseName, setSelectedExerciseName] = useState<string | null>(watchlistNames[0] ?? null);
+  const [selectedExerciseName, setSelectedExerciseName] = useState<string | null>(null);
   const [classFilter, setClassFilter] = useState<Level100ClassFilter>("all");
-  const [watchlistLoaded, setWatchlistLoaded] = useState(false);
   const [manualRecords, setManualRecords] = useState<Record<string, Level100ManualRecord>>({});
+
+  const cloudWatchlist = data.level100Watchlist;
+  const watchlistNames = useMemo(
+    () => (cloudWatchlist.length ? dedupeWatchlist(cloudWatchlist) : dedupeWatchlist(LEVEL_100_TARGET_EXERCISES)),
+    [cloudWatchlist]
+  );
+
   const availableLevel100ExerciseOptions = useMemo(
     () =>
       dedupeWatchlist([
@@ -758,55 +768,78 @@ export default function DashboardPage() {
     [data]
   );
 
+  // One-shot migration: read legacy localStorage watchlist + apply old migrations,
+  // then push the whole list into the cloud snapshot. Idempotent via the
+  // existing migration flags so we never push twice.
   useEffect(() => {
+    if (!isReady || !syncStatus.canWrite) {
+      return;
+    }
+
+    if (cloudWatchlist.length > 0) {
+      return;
+    }
+
+    let storedNames: string[] = [];
+
     try {
       const storedValue = window.localStorage.getItem(level100WatchlistStorageKey);
 
-      if (!storedValue) {
-        setWatchlistLoaded(true);
-        return;
-      }
+      if (storedValue) {
+        const parsedValue = JSON.parse(storedValue);
 
-      const parsedValue = JSON.parse(storedValue);
-
-      if (Array.isArray(parsedValue)) {
-        const rawStoredNames = parsedValue.filter((name): name is string => typeof name === "string");
-        const shouldAddIsometryDefaults = !window.localStorage.getItem(level100WatchlistMigrationStorageKey);
-        const shouldExpandArmwrestlingSides = !window.localStorage.getItem(level100ArmwrestlingSidesMigrationStorageKey);
-        const storedNames = shouldExpandArmwrestlingSides
-          ? expandArmwrestlingWatchlistSides(rawStoredNames)
-          : rawStoredNames;
-        const nextWatchlist = dedupeWatchlist(
-          shouldAddIsometryDefaults ? [...storedNames, ...level100DefaultIsometryExercises] : storedNames
-        );
-
-        if (nextWatchlist.length) {
-          setWatchlistNames(nextWatchlist);
-          setSelectedExerciseName((currentName) => currentName ?? nextWatchlist[0] ?? null);
-        }
-
-        if (shouldAddIsometryDefaults) {
-          window.localStorage.setItem(level100WatchlistMigrationStorageKey, "done");
-        }
-
-        if (shouldExpandArmwrestlingSides) {
-          window.localStorage.setItem(level100ArmwrestlingSidesMigrationStorageKey, "done");
+        if (Array.isArray(parsedValue)) {
+          storedNames = parsedValue.filter((name): name is string => typeof name === "string");
         }
       }
     } catch {
       window.localStorage.removeItem(level100WatchlistStorageKey);
-    } finally {
-      setWatchlistLoaded(true);
     }
-  }, []);
 
-  useEffect(() => {
-    if (!watchlistLoaded) {
+    const shouldAddIsometryDefaults = !window.localStorage.getItem(level100WatchlistMigrationStorageKey);
+    const shouldExpandArmwrestlingSides = !window.localStorage.getItem(level100ArmwrestlingSidesMigrationStorageKey);
+    const shouldSeedStatsExercises = !window.localStorage.getItem(level100StatsExercisesMigrationStorageKey);
+    const shouldSeedRisingBeltCurl = !window.localStorage.getItem(level100RisingBeltCurlMigrationStorageKey);
+
+    const baseNames = shouldExpandArmwrestlingSides
+      ? expandArmwrestlingWatchlistSides(storedNames)
+      : storedNames;
+
+    const merged = dedupeWatchlist([
+      ...baseNames,
+      ...LEVEL_100_TARGET_EXERCISES,
+      ...(shouldAddIsometryDefaults ? level100DefaultIsometryExercises : []),
+      ...(shouldSeedStatsExercises ? level100StatsExerciseOptions : []),
+      ...(shouldSeedRisingBeltCurl ? level100RisingBeltCurlExercises : [])
+    ]);
+
+    if (!merged.length) {
       return;
     }
 
-    window.localStorage.setItem(level100WatchlistStorageKey, JSON.stringify(watchlistNames));
+    void (async () => {
+      for (const exerciseName of merged) {
+        try {
+          await addWatchlistExerciseRemote(exerciseName);
+        } catch {
+          return;
+        }
+      }
 
+      window.localStorage.setItem(level100WatchlistMigrationStorageKey, "done");
+      window.localStorage.setItem(level100ArmwrestlingSidesMigrationStorageKey, "done");
+      window.localStorage.setItem(level100StatsExercisesMigrationStorageKey, "done");
+      window.localStorage.setItem(level100RisingBeltCurlMigrationStorageKey, "done");
+    })();
+  }, [
+    addWatchlistExerciseRemote,
+    cloudWatchlist.length,
+    isReady,
+    level100StatsExerciseOptions,
+    syncStatus.canWrite
+  ]);
+
+  useEffect(() => {
     if (!watchlistNames.length) {
       setSelectedExerciseName(null);
       return;
@@ -815,37 +848,7 @@ export default function DashboardPage() {
     if (!selectedExerciseName || !watchlistNames.some((name) => name === selectedExerciseName)) {
       setSelectedExerciseName(watchlistNames[0] ?? null);
     }
-  }, [selectedExerciseName, watchlistLoaded, watchlistNames]);
-
-  useEffect(() => {
-    if (!isReady || !watchlistLoaded || !level100StatsExerciseOptions.length) {
-      return;
-    }
-
-    if (window.localStorage.getItem(level100StatsExercisesMigrationStorageKey)) {
-      return;
-    }
-
-    setWatchlistNames((currentNames) =>
-      dedupeWatchlist([...currentNames, ...level100StatsExerciseOptions])
-    );
-    window.localStorage.setItem(level100StatsExercisesMigrationStorageKey, "done");
-  }, [isReady, level100StatsExerciseOptions, watchlistLoaded]);
-
-  useEffect(() => {
-    if (!isReady || !watchlistLoaded) {
-      return;
-    }
-
-    if (window.localStorage.getItem(level100RisingBeltCurlMigrationStorageKey)) {
-      return;
-    }
-
-    setWatchlistNames((currentNames) =>
-      dedupeWatchlist([...currentNames, ...level100RisingBeltCurlExercises])
-    );
-    window.localStorage.setItem(level100RisingBeltCurlMigrationStorageKey, "done");
-  }, [isReady, watchlistLoaded]);
+  }, [selectedExerciseName, watchlistNames]);
 
   useEffect(() => {
     try {
@@ -859,27 +862,35 @@ export default function DashboardPage() {
     }
   }, []);
 
-  function addWatchlistExercise() {
+  async function addWatchlistExercise() {
     const exerciseName = normalizeWatchlistName(newExerciseName);
 
     if (!exerciseName) {
       return;
     }
 
-    setWatchlistNames((currentNames) => dedupeWatchlist([...currentNames, exerciseName]));
-    setSelectedExerciseName(exerciseName);
-    setNewExerciseName("");
+    try {
+      await addWatchlistExerciseRemote(exerciseName);
+      setSelectedExerciseName(exerciseName);
+      setNewExerciseName("");
+    } catch {
+      // commit fails leave the user input intact so they can retry
+    }
   }
 
-  function removeWatchlistExercise(exerciseName: string) {
-    setWatchlistNames((currentNames) => currentNames.filter((name) => name !== exerciseName));
-    setManualRecords((currentRecords) => {
-      const nextRecords = { ...currentRecords };
+  async function removeWatchlistExercise(exerciseName: string) {
+    try {
+      await removeWatchlistExerciseRemote(exerciseName);
+      setManualRecords((currentRecords) => {
+        const nextRecords = { ...currentRecords };
 
-      delete nextRecords[getDashboardExerciseKey(exerciseName)];
+        delete nextRecords[getDashboardExerciseKey(exerciseName)];
 
-      return nextRecords;
-    });
+        return nextRecords;
+      });
+    } catch {
+      // commit fails: leave UI as is
+    }
   }
 
   function saveManualRecord(record: Level100ManualRecord) {

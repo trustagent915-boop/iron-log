@@ -450,7 +450,11 @@ function isValidLevel100Record(exerciseLog: WorkoutExerciseLog, bodyweightKg: nu
     return false;
   }
 
-  if (rule.needsDedicatedMetric || rule.id === "one_arm_isometry") {
+  if (rule.id === "one_arm_isometry") {
+    return (exerciseLog.actualSeconds ?? 0) >= 10 && bodyweightKg > 0;
+  }
+
+  if (rule.needsDedicatedMetric) {
     return false;
   }
 
@@ -532,13 +536,15 @@ export function buildLevel100Dashboard(
         exerciseName,
         weight: exerciseLog.actualWeight,
         bodyweightKg: recordBodyweightKg,
-        reps: exerciseLog.actualReps
+        reps: exerciseLog.actualReps,
+        seconds: exerciseLog.actualSeconds
       });
       const currentBestScore = getLevel100Score({
         exerciseName,
         weight: bucket.bestValidWeight,
         bodyweightKg: bucket.bestValidBodyweightKg ?? bodyweightKg,
-        reps: bucket.bestValidReps
+        reps: bucket.bestValidReps,
+        seconds: bucket.bestValidSeconds
       });
 
       bucket.validRecordCount += 1;
@@ -546,6 +552,7 @@ export function buildLevel100Dashboard(
       if (score > currentBestScore) {
         bucket.bestValidWeight = exerciseLog.actualWeight;
         bucket.bestValidReps = exerciseLog.actualReps;
+        bucket.bestValidSeconds = exerciseLog.actualSeconds;
         bucket.bestValidBodyweightKg = recordBodyweightKg;
         bucket.bestValidDate = performedDate;
       }
