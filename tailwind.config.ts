@@ -26,6 +26,8 @@ const config: Config = {
         "secondary-foreground": "hsl(var(--secondary-foreground))",
         accent: "hsl(var(--accent))",
         "accent-foreground": "hsl(var(--accent-foreground))",
+        success: "hsl(var(--success))",
+        warning: "hsl(var(--warning))",
         destructive: "hsl(var(--destructive))",
         "destructive-foreground": "hsl(var(--destructive-foreground))"
       },

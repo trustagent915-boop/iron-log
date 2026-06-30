@@ -5,6 +5,18 @@ create table if not exists public.arm_tracker_snapshots (
   updated_at timestamptz not null default timezone('utc', now())
 );
 
+create table if not exists public.arm_tracker_snapshot_versions (
+  id uuid primary key default gen_random_uuid(),
+  owner_key text not null,
+  snapshot jsonb not null,
+  seed_version text,
+  source text not null default 'api',
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+create index if not exists arm_tracker_snapshot_versions_owner_created_idx
+on public.arm_tracker_snapshot_versions(owner_key, created_at desc);
+
 create or replace function public.set_arm_tracker_updated_at()
 returns trigger
 language plpgsql
@@ -23,11 +35,19 @@ for each row
 execute function public.set_arm_tracker_updated_at();
 
 alter table public.arm_tracker_snapshots enable row level security;
+alter table public.arm_tracker_snapshot_versions enable row level security;
 
 drop policy if exists "service role can manage arm tracker snapshots" on public.arm_tracker_snapshots;
+drop policy if exists "service role can manage arm tracker snapshot versions" on public.arm_tracker_snapshot_versions;
 
 create policy "service role can manage arm tracker snapshots"
 on public.arm_tracker_snapshots
+for all
+using (auth.role() = 'service_role')
+with check (auth.role() = 'service_role');
+
+create policy "service role can manage arm tracker snapshot versions"
+on public.arm_tracker_snapshot_versions
 for all
 using (auth.role() = 'service_role')
 with check (auth.role() = 'service_role');

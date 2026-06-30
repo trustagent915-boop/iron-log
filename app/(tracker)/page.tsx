@@ -530,12 +530,16 @@ function Level100RecordDetail({
   exercise,
   manualRecord,
   onSave,
-  onClear
+  onClear,
+  canSave,
+  syncMessage
 }: {
   exercise: Level100Exercise | null;
   manualRecord: Level100ManualRecord | null;
   onSave: (record: Level100ManualRecord) => void;
   onClear: (exerciseName: string) => void;
+  canSave: boolean;
+  syncMessage: string | null;
 }) {
   const [weightInput, setWeightInput] = useState("");
   const [recordBodyweightInput, setRecordBodyweightInput] = useState("");
@@ -574,6 +578,10 @@ function Level100RecordDetail({
   const isManual = Boolean(manualRecord);
 
   function saveRecord() {
+    if (!canSave) {
+      return;
+    }
+
     const nextRecord = {
       exerciseName: activeExercise.exerciseName,
       bodyweightKg: parseNumberInputValue(recordBodyweightInput),
@@ -694,19 +702,31 @@ function Level100RecordDetail({
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" onClick={saveRecord}>
+        <Button type="button" size="sm" onClick={saveRecord} disabled={!canSave}>
           Salva record
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={() => onClear(exercise.exerciseName)}>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => onClear(exercise.exerciseName)}
+          disabled={!canSave}
+        >
           Ripristina import
         </Button>
       </div>
+      {!canSave ? (
+        <p className="text-sm leading-6 text-muted-foreground">
+          {syncMessage ??
+            "Il record non viene salvato nel browser: serve il database cloud attivo per renderlo persistente su tutti i dispositivi."}
+        </p>
+      ) : null}
     </div>
   );
 }
 
 export default function DashboardPage() {
-  const { data, activePlan, isReady } = useArmTracker();
+  const { data, activePlan, isReady, syncStatus } = useArmTracker();
   const [bodyweightInput, setBodyweightInput] = useState("90");
   const [watchlistNames, setWatchlistNames] = useState<string[]>(() =>
     dedupeWatchlist(LEVEL_100_TARGET_EXERCISES)
@@ -716,7 +736,6 @@ export default function DashboardPage() {
   const [classFilter, setClassFilter] = useState<Level100ClassFilter>("all");
   const [watchlistLoaded, setWatchlistLoaded] = useState(false);
   const [manualRecords, setManualRecords] = useState<Record<string, Level100ManualRecord>>({});
-  const [manualRecordsLoaded, setManualRecordsLoaded] = useState(false);
   const availableLevel100ExerciseOptions = useMemo(
     () =>
       dedupeWatchlist([
@@ -829,18 +848,8 @@ export default function DashboardPage() {
       }
     } catch {
       window.localStorage.removeItem(level100ManualRecordsStorageKey);
-    } finally {
-      setManualRecordsLoaded(true);
     }
   }, []);
-
-  useEffect(() => {
-    if (!manualRecordsLoaded) {
-      return;
-    }
-
-    window.localStorage.setItem(level100ManualRecordsStorageKey, JSON.stringify(manualRecords));
-  }, [manualRecords, manualRecordsLoaded]);
 
   function addWatchlistExercise() {
     const exerciseName = normalizeWatchlistName(newExerciseName);
@@ -866,6 +875,10 @@ export default function DashboardPage() {
   }
 
   function saveManualRecord(record: Level100ManualRecord) {
+    if (!syncStatus.canWrite) {
+      return;
+    }
+
     const exerciseName = normalizeWatchlistName(record.exerciseName);
 
     setManualRecords((currentRecords) => ({
@@ -878,6 +891,10 @@ export default function DashboardPage() {
   }
 
   function clearManualRecord(exerciseName: string) {
+    if (!syncStatus.canWrite) {
+      return;
+    }
+
     setManualRecords((currentRecords) => {
       const nextRecords = { ...currentRecords };
 
@@ -1097,6 +1114,8 @@ export default function DashboardPage() {
                             manualRecord={selectedManualRecord}
                             onSave={saveManualRecord}
                             onClear={clearManualRecord}
+                            canSave={syncStatus.canWrite}
+                            syncMessage={syncStatus.message}
                           />
                         ) : null}
                       </div>
@@ -1282,6 +1301,8 @@ export default function DashboardPage() {
                             manualRecord={selectedManualRecord}
                             onSave={saveManualRecord}
                             onClear={clearManualRecord}
+                            canSave={syncStatus.canWrite}
+                            syncMessage={syncStatus.message}
                           />
                         ) : null}
                       </div>

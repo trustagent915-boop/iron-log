@@ -37,12 +37,13 @@ function toFieldValue(value: number | null) {
 export default function LogWorkoutPage() {
   const params = useParams<{ sessionId: string }>();
   const router = useRouter();
-  const { findSessionDetails, isReady, saveWorkoutLog } = useArmTracker();
+  const { findSessionDetails, isReady, saveWorkoutLog, syncStatus } = useArmTracker();
   const [performedDate, setPerformedDate] = useState("");
   const [bodyweightInput, setBodyweightInput] = useState("");
   const [overallNotes, setOverallNotes] = useState("");
   const [drafts, setDrafts] = useState<Record<string, ExerciseDraft>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
   const details = useMemo(
@@ -110,11 +111,12 @@ export default function LogWorkoutPage() {
     }));
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     setIsSaving(true);
+    setErrorMessage(null);
 
     try {
-      saveWorkoutLog({
+      await saveWorkoutLog({
         sessionId: sessionDetails.session.id,
         performedDate,
         bodyweightKg: parseInputNumber(bodyweightInput),
@@ -135,6 +137,8 @@ export default function LogWorkoutPage() {
       });
 
       router.push("/" as Route);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Salvataggio cloud non riuscito.");
     } finally {
       setIsSaving(false);
     }
@@ -157,7 +161,17 @@ export default function LogWorkoutPage() {
         <Card>
           <CardContent className="p-6 text-sm text-warning">
             Nessun set pianificato trovato in questa sessione. Se i dati arrivano
-            incompleti, valuta una reimportazione del file Excel.
+            incompleti, valuta una reimportazione del programma in CSV.
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {!syncStatus.canWrite ? (
+        <Card>
+          <CardContent className="p-6 text-sm leading-7 text-muted-foreground">
+            <span className="font-semibold text-foreground">Salvataggio disattivato.</span>{" "}
+            {syncStatus.message ??
+              "Il cloud non e disponibile: il workout non verra salvato solo su questo dispositivo."}
           </CardContent>
         </Card>
       ) : null}
@@ -344,8 +358,14 @@ export default function LogWorkoutPage() {
         })}
       </div>
 
+      {errorMessage ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-destructive">{errorMessage}</CardContent>
+        </Card>
+      ) : null}
+
       <div className="flex flex-wrap gap-3">
-        <Button onClick={handleSubmit} disabled={isSaving || !performedDate}>
+        <Button onClick={handleSubmit} disabled={isSaving || !performedDate || !syncStatus.canWrite}>
           {isSaving ? "Salvataggio..." : "Salva allenamento"}
         </Button>
         <Button

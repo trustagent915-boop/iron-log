@@ -5,7 +5,6 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import type { ChangeEvent, DragEvent } from "react";
 import { useEffect, useRef, useState } from "react";
-import type { WorkBook } from "xlsx";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -21,6 +20,7 @@ import {
   getSheetNames,
   getSuggestedSheetName,
   parseSheet,
+  type ParsedWorkbook,
   readWorkbook
 } from "@/lib/arm-tracker/excel-parser";
 import type { ColumnMapping, ImportPlanResult, ParsedSheetResult } from "@/lib/arm-tracker/types";
@@ -50,14 +50,14 @@ const emptyMapping: ColumnMapping = {
 
 export default function ImportPage() {
   const router = useRouter();
-  const { data, exportArchive, importArchive, importPlan, isReady } = useArmTracker();
+  const { data, exportArchive, importArchive, importPlan, isReady, syncStatus } = useArmTracker();
   const inputRef = useRef<HTMLInputElement | null>(null);
   const archiveInputRef = useRef<HTMLInputElement | null>(null);
   const [step, setStep] = useState(1);
   const [isUploading, setIsUploading] = useState(false);
   const [isImportingArchive, setIsImportingArchive] = useState(false);
   const [fileName, setFileName] = useState("");
-  const [workbook, setWorkbook] = useState<WorkBook | null>(null);
+  const [workbook, setWorkbook] = useState<ParsedWorkbook | null>(null);
   const [sheetNames, setSheetNames] = useState<string[]>([]);
   const [selectedSheet, setSelectedSheet] = useState("");
   const [headers, setHeaders] = useState<string[]>([]);
@@ -101,7 +101,7 @@ export default function ImportPage() {
 
     try {
       const buffer = await file.arrayBuffer();
-      const nextWorkbook = readWorkbook(buffer);
+      const nextWorkbook = readWorkbook(buffer, file.name);
       const nextSheetNames = getSheetNames(nextWorkbook);
       const suggestedSheet = getSuggestedSheetName(nextSheetNames);
 
@@ -110,8 +110,8 @@ export default function ImportPage() {
       setSheetNames(nextSheetNames);
       setSelectedSheet(suggestedSheet);
       setStep(nextSheetNames.length ? 2 : 1);
-    } catch {
-      setErrorMessage("Non sono riuscito a leggere il file Excel. Verifica che sia un .xlsx o .xls valido.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Non sono riuscito a leggere il file CSV.");
     } finally {
       setIsUploading(false);
     }
@@ -145,21 +145,25 @@ export default function ImportPage() {
     }));
   }
 
-  function handleImport() {
+  async function handleImport() {
     if (!parsedSheet || !selectedSheet || !fileName) {
       return;
     }
 
-    const result = importPlan({
-      fileName,
-      sheetName: selectedSheet,
-      rows: parsedSheet.rows,
-      warnings: parsedSheet.warnings,
-      totalRows: parsedSheet.totalRows
-    });
+    try {
+      const result = await importPlan({
+        fileName,
+        sheetName: selectedSheet,
+        rows: parsedSheet.rows,
+        warnings: parsedSheet.warnings,
+        totalRows: parsedSheet.totalRows
+      });
 
-    setImportResult(result);
-    setStep(4);
+      setImportResult(result);
+      setStep(4);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Importazione non disponibile.");
+    }
   }
 
   function handleArchiveExport() {
@@ -208,9 +212,19 @@ export default function ImportPage() {
     <div className="page-enter space-y-8">
       <PageHeader
         eyebrow="Importazione"
-        title="Importa il programma Excel"
-        description="Carica il file, scegli il foglio corretto e conferma il mapping delle colonne prima di salvare il nuovo piano attivo."
+        title="Importa il programma CSV"
+        description="Carica un CSV, controlla il mapping delle colonne e salva il nuovo piano attivo solo quando il cloud e confermato."
       />
+
+      {!syncStatus.canWrite ? (
+        <Card>
+          <CardContent className="p-6 text-sm leading-7 text-muted-foreground">
+            <span className="font-semibold text-foreground">Import cloud disattivato.</span>{" "}
+            {syncStatus.message ??
+              "Puoi esportare un backup, ma non importare nuovi dati finche il database cloud non e confermato."}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="overflow-hidden">
         <div className="grid gap-0 lg:grid-cols-[1.1fr_0.9fr]">
@@ -222,8 +236,8 @@ export default function ImportPage() {
               </h2>
               <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
                 Il vault esporta tutto lo stato Iron Log in un JSON versionato. Puoi anche reimportare
-                workbook storici `.xls` o `.xlsx` nel formato Iron Log per unire anni diversi nello
-                stesso storico locale.
+                backup JSON esportati dall&apos;app. Gli Excel `.xls` e `.xlsx` sono sospesi finche il
+                parsing non sara spostato server-side con controlli di sicurezza.
               </p>
             </div>
 
@@ -250,7 +264,7 @@ export default function ImportPage() {
               <Button
                 variant="outline"
                 onClick={() => archiveInputRef.current?.click()}
-                disabled={isImportingArchive}
+                disabled={isImportingArchive || !syncStatus.canWrite}
               >
                 <Upload className="mr-2 h-4 w-4" />
                 {isImportingArchive ? "Import backup..." : "Unisci backup o workbook"}
@@ -260,7 +274,7 @@ export default function ImportPage() {
             <input
               ref={archiveInputRef}
               type="file"
-              accept=".json,application/json,.xls,.xlsx"
+              accept=".json,application/json"
               className="hidden"
               onChange={handleArchiveFileChange}
             />
@@ -324,15 +338,15 @@ export default function ImportPage() {
               onDragOver={(event) => event.preventDefault()}
               className="flex min-h-52 w-full flex-col items-center justify-center rounded-3xl border border-dashed border-border/80 bg-secondary/20 px-6 text-center transition hover:border-primary/40 hover:bg-secondary/35"
             >
-              <p className="text-lg font-semibold text-foreground">Trascina qui il tuo file Excel</p>
+              <p className="text-lg font-semibold text-foreground">Trascina qui il tuo file CSV</p>
               <p className="mt-2 max-w-lg text-sm text-muted-foreground">
-                Oppure tocca per selezionare un file .xlsx o .xls. Il parsing avviene tutto sul dispositivo.
+                Oppure tocca per selezionare un file .csv esportato dal foglio.
               </p>
               <span className="mt-5 rounded-full border border-border/70 px-4 py-2 text-sm text-muted-foreground">
                 {isUploading ? "Lettura in corso..." : fileName || "Scegli file"}
               </span>
             </button>
-            <input ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={onFileChange} />
+            <input ref={inputRef} type="file" accept=".csv,text/csv" className="hidden" onChange={onFileChange} />
             {errorMessage ? <p className="text-sm text-destructive">{errorMessage}</p> : null}
           </CardContent>
         </Card>
@@ -463,7 +477,9 @@ export default function ImportPage() {
             <div className="flex flex-wrap gap-3">
               <Button
                 onClick={handleImport}
-                disabled={Boolean(completeness.missingRequired.length || !parsedSheet?.importedRows)}
+                disabled={Boolean(
+                  completeness.missingRequired.length || !parsedSheet?.importedRows || !syncStatus.canWrite
+                )}
               >
                 Conferma importazione
               </Button>

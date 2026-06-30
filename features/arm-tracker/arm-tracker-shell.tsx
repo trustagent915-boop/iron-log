@@ -3,11 +3,13 @@
 import {
   BarChart3,
   CalendarDays,
+  Cloud,
   Dumbbell,
   History,
   LayoutDashboard,
   Plus,
-  Upload
+  Upload,
+  WifiOff
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
@@ -24,6 +26,7 @@ const navItems: Array<{ href: Route; label: string; icon: typeof LayoutDashboard
   { href: "/program", label: "Programma", icon: CalendarDays },
   { href: "/history", label: "Storico", icon: History },
   { href: "/stats", label: "Statistiche", icon: BarChart3 },
+  { href: "/sync", label: "Sync", icon: Cloud },
   { href: "/import", label: "Importa", icon: Upload }
 ];
 
@@ -37,7 +40,7 @@ function isActivePath(currentPath: string, itemPath: string) {
 
 export function ArmTrackerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { data, activePlan } = useArmTracker();
+  const { data, activePlan, syncStatus } = useArmTracker();
   const planSessions = activePlan ? getPlanSessions(data, activePlan.id) : [];
   const completedSessions = planSessions.filter((session) => session.status === "completed").length;
   const lastWorkoutDate = getLastWorkoutDate(data);
@@ -166,11 +169,27 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
             </Button>
           </header>
 
-          <main className="mx-auto w-full max-w-6xl flex-1">{children}</main>
+          <main className="mx-auto w-full max-w-6xl flex-1 space-y-4">
+            {!syncStatus.canWrite ? (
+              <div className="rounded-[22px] border border-warning/35 bg-warning/10 p-4 text-sm leading-6 text-warning">
+                <div className="flex gap-3">
+                  <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-foreground">Salvataggi cloud bloccati</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {syncStatus.message ??
+                        "Il database unico non e disponibile. Puoi leggere ed esportare, ma non registrare nuovi dati reali in locale."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            {children}
+          </main>
         </div>
 
         <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08] bg-background/90 px-2 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl xl:hidden">
-          <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
+          <div className="mx-auto grid max-w-2xl grid-cols-6 gap-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = isActivePath(pathname, item.href);
