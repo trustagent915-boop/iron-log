@@ -16,6 +16,7 @@ const currentSchemaVersion = 2;
 
 const storageKeys = {
   root: "iron_log_db_v2",
+  localBackups: "iron_log_db_v2_backups",
   seedVersion: "iron_log_seed_version",
   legacyPlans: "aw_plans",
   legacySessions: "aw_sessions",
@@ -33,6 +34,8 @@ const collectionKeys = [
   "exerciseLogs",
   "importRuns"
 ] as const;
+
+const maxLocalBackupCount = 10;
 
 export const ARM_TRACKER_STORAGE_EVENT = "iron-log-storage-updated";
 
@@ -155,6 +158,7 @@ function normalizeWorkoutLog(raw: unknown): WorkoutLog | null {
     id: asString(raw.id, createFallbackId("workout")),
     planSessionId: asString(raw.planSessionId),
     performedDate: asString(raw.performedDate, new Date(0).toISOString().slice(0, 10)),
+    bodyweightKg: asNullableNumber(raw.bodyweightKg),
     overallNotes: asNullableString(raw.overallNotes),
     completionStatus:
       raw.completionStatus === "partial" || raw.completionStatus === "skipped"
@@ -278,6 +282,39 @@ function buildArchive(snapshot: ArmTrackerData, exportedAt = new Date().toISOStr
     exportedAt,
     data: normalizeSnapshot(snapshot)
   };
+}
+
+function readLocalBackups() {
+  if (!canUseStorage()) {
+    return [];
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(storageKeys.localBackups);
+    const parsedValue = rawValue ? JSON.parse(rawValue) : [];
+    return Array.isArray(parsedValue) ? parsedValue : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalBackup(snapshot: ArmTrackerData | null, reason: string) {
+  if (!canUseStorage() || !snapshot || !hasStoredData(snapshot)) {
+    return;
+  }
+
+  const createdAt = new Date().toISOString();
+  const backup = {
+    id: `${reason}-${createdAt}`,
+    reason,
+    createdAt,
+    archive: buildArchive(snapshot, createdAt)
+  };
+
+  window.localStorage.setItem(
+    storageKeys.localBackups,
+    JSON.stringify([backup, ...readLocalBackups()].slice(0, maxLocalBackupCount))
+  );
 }
 
 function writeRootSnapshot(snapshot: ArmTrackerData) {
@@ -433,6 +470,28 @@ export function exportArmTrackerArchive(snapshot = db.getSnapshot()): ArmTracker
   };
 }
 
+export function exportArmTrackerLocalBackups() {
+  const exportedAt = new Date().toISOString();
+  const backups = readLocalBackups();
+
+  return {
+    fileName: `iron-log-safety-backups-${exportedAt.slice(0, 10)}.json`,
+    payload: JSON.stringify(
+      {
+        app: "iron-log",
+        type: "local-safety-backups",
+        schemaVersion: currentSchemaVersion,
+        exportedAt,
+        backups
+      },
+      null,
+      2
+    ),
+    exportedAt,
+    count: backups.length
+  };
+}
+
 export function importArmTrackerArchive(payload: string): ArmTrackerArchiveImportResult {
   let parsedValue: unknown;
 
@@ -478,8 +537,10 @@ export const db = {
   },
 
   setSnapshot(snapshot: ArmTrackerData) {
+    const currentSnapshot = readRootSnapshot();
     const normalizedSnapshot = normalizeSnapshot(snapshot);
 
+    writeLocalBackup(currentSnapshot, "before-setSnapshot");
     writeRootSnapshot(normalizedSnapshot);
     clearLegacyKeys();
     notifyStorageUpdate();

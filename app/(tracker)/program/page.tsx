@@ -69,7 +69,7 @@ export default function ProgramPage() {
         <PageHeader
           eyebrow="Programma"
           title="Nessun piano attivo"
-          description="Importa un file Excel per trasformare il calendario degli allenamenti in una timeline leggibile e subito pronta per il log."
+          description="Importa un CSV per trasformare il calendario degli allenamenti in una timeline leggibile e subito pronta per il log."
         />
         <Card>
           <CardContent className="flex flex-col gap-4 p-6 pt-6 sm:flex-row sm:items-center sm:justify-between sm:p-7 sm:pt-7">

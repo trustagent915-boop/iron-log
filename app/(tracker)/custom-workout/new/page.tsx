@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
+import { getCustomWorkoutValidationState } from "@/lib/arm-tracker/custom-workout-validation";
 import {
   getCustomSessionsWithExercises,
   getExerciseLibraryOptions,
@@ -43,7 +44,7 @@ function createEmptyExercise(id: string): ExerciseDraft {
 
 export default function NewCustomWorkoutPage() {
   const router = useRouter();
-  const { activePlan, createCustomSession, data, isReady } = useArmTracker();
+  const { activePlan, createCustomSession, data, isReady, syncStatus } = useArmTracker();
   const [sessionDate, setSessionDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [title, setTitle] = useState("");
   const [notes, setNotes] = useState("");
@@ -87,6 +88,7 @@ export default function NewCustomWorkoutPage() {
   const planSessions = getPlanSessions(data, activePlan.id);
   const customSessions = getCustomSessionsWithExercises(data, activePlan.id);
   const namedExercises = exercises.filter((exercise) => exercise.exerciseName.trim()).length;
+  const validationState = getCustomWorkoutValidationState({ sessionDate, exercises });
 
   function updateExercise(exerciseId: string, patch: Partial<ExerciseDraft>) {
     setExercises((currentExercises) =>
@@ -112,12 +114,18 @@ export default function NewCustomWorkoutPage() {
     );
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     setErrorMessage(null);
+
+    if (!validationState.canSubmit) {
+      setErrorMessage(validationState.message);
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
-      const result = createCustomSession({
+      const result = await createCustomSession({
         sessionDate,
         title,
         notes,
@@ -151,6 +159,16 @@ export default function NewCustomWorkoutPage() {
           </Button>
         }
       />
+
+      {!syncStatus.canWrite ? (
+        <Card>
+          <CardContent className="p-6 text-sm leading-7 text-muted-foreground">
+            <span className="font-semibold text-foreground">Creazione disattivata.</span>{" "}
+            {syncStatus.message ??
+              "Il cloud non e disponibile: la sessione non verra creata solo su questo dispositivo."}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
         <Card>
@@ -391,13 +409,24 @@ export default function NewCustomWorkoutPage() {
             registrare i dati reali.
           </p>
           <div className="flex flex-wrap gap-3">
-            <Button onClick={handleSubmit} disabled={isSubmitting || !sessionDate}>
+            <Button
+              onClick={handleSubmit}
+              disabled={isSubmitting || !validationState.canSubmit || !syncStatus.canWrite}
+            >
               {isSubmitting ? "Creazione..." : "Crea e apri il log"}
             </Button>
             <Button asChild variant="outline">
               <Link href={"/program" as Route}>Annulla</Link>
             </Button>
           </div>
+          {!validationState.canSubmit ? (
+            <p className="text-sm leading-6 text-muted-foreground">{validationState.message}</p>
+          ) : null}
+          {!syncStatus.canWrite ? (
+            <p className="text-sm leading-6 text-muted-foreground">
+              I salvataggi restano bloccati finche il database cloud non e confermato.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

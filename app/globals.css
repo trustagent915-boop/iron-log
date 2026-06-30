@@ -7,8 +7,8 @@
   --foreground: 35 20% 94%;
   --card: 218 24% 11%;
   --card-foreground: 35 20% 94%;
-  --primary: 27 96% 58%;
-  --primary-foreground: 220 20% 7%;
+  --primary: 263 90% 66%;
+  --primary-foreground: 260 28% 98%;
   --secondary: 218 19% 15%;
   --secondary-foreground: 35 16% 91%;
   --muted: 220 16% 17%;
@@ -19,7 +19,7 @@
   --destructive-foreground: 220 10% 93%;
   --border: 218 18% 24%;
   --input: 218 18% 18%;
-  --ring: 27 96% 58%;
+  --ring: 263 90% 66%;
   --success: 142 71% 45%;
   --warning: 38 92% 50%;
   --radius: 1.1rem;
@@ -35,8 +35,8 @@ body {
   font-family: var(--font-sans), sans-serif;
   position: relative;
   background-image:
-    radial-gradient(circle at top left, rgba(255, 146, 56, 0.2), transparent 24%),
-    radial-gradient(circle at top right, rgba(46, 179, 163, 0.12), transparent 18%),
+    radial-gradient(circle at top left, rgba(139, 92, 246, 0.24), transparent 24%),
+    radial-gradient(circle at top right, rgba(168, 85, 247, 0.16), transparent 18%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.04), transparent 18%),
     linear-gradient(180deg, #0d1118 0%, #121720 42%, #0c1016 100%);
 }
@@ -80,7 +80,7 @@ textarea {
 }
 
 ::selection {
-  background: rgba(255, 146, 56, 0.28);
+  background: rgba(139, 92, 246, 0.32);
   color: white;
 }
 

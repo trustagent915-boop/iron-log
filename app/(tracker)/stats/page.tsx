@@ -253,7 +253,7 @@ export default function StatsPage() {
   );
 
   const trendConfig = {
-    volume: { key: "volume", color: "#ff9238" },
+    volume: { key: "volume", color: "#8b5cf6" },
     workoutCount: { key: "workoutCount", color: "#2eb3a3" },
     adherence: { key: "adherence", color: "#7dd3fc" }
   }[trendMetric];
@@ -453,7 +453,7 @@ export default function StatsPage() {
                       }
                     />
                     {exerciseConfig.plannedKey ? <Line type="monotone" dataKey="plannedValue" name="Previsto" stroke="#2eb3a3" strokeDasharray="6 6" strokeWidth={2} dot={false} /> : null}
-                    <Line type="monotone" dataKey="actualValue" name="Eseguito" stroke="#ff9238" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                    <Line type="monotone" dataKey="actualValue" name="Eseguito" stroke="#8b5cf6" strokeWidth={3} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
@@ -493,7 +493,7 @@ export default function StatsPage() {
                     <XAxis type="number" stroke={chartAxis} />
                     <YAxis dataKey="exerciseName" type="category" width={110} stroke={chartAxis} />
                     <Tooltip contentStyle={chartStyle} formatter={(value: number) => formatMetric(leaderboardMetric, value)} />
-                    <Bar dataKey="chartValue" fill="#ff9238" radius={[0, 10, 10, 0]} />
+                    <Bar dataKey="chartValue" fill="#8b5cf6" radius={[0, 10, 10, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -531,7 +531,7 @@ export default function StatsPage() {
                     <YAxis stroke={chartAxis} />
                     <Tooltip contentStyle={chartStyle} formatter={(value: number, name: string) => [name === "volume" ? formatVolume(value) : `${value}`, name === "volume" ? "Volume" : "Workout"]} />
                     <Bar dataKey="workoutCount" fill="#2eb3a3" radius={[10, 10, 0, 0]} />
-                    <Bar dataKey="volume" fill="#ff9238" radius={[10, 10, 0, 0]} />
+                    <Bar dataKey="volume" fill="#8b5cf6" radius={[10, 10, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

@@ -3,11 +3,13 @@
 import {
   BarChart3,
   CalendarDays,
+  Cloud,
   Dumbbell,
   History,
   LayoutDashboard,
   Plus,
-  Upload
+  Upload,
+  WifiOff
 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
@@ -24,6 +26,7 @@ const navItems: Array<{ href: Route; label: string; icon: typeof LayoutDashboard
   { href: "/program", label: "Programma", icon: CalendarDays },
   { href: "/history", label: "Storico", icon: History },
   { href: "/stats", label: "Statistiche", icon: BarChart3 },
+  { href: "/sync", label: "Sync", icon: Cloud },
   { href: "/import", label: "Importa", icon: Upload }
 ];
 
@@ -37,7 +40,7 @@ function isActivePath(currentPath: string, itemPath: string) {
 
 export function ArmTrackerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { data, activePlan } = useArmTracker();
+  const { data, activePlan, syncStatus } = useArmTracker();
   const planSessions = activePlan ? getPlanSessions(data, activePlan.id) : [];
   const completedSessions = planSessions.filter((session) => session.status === "completed").length;
   const lastWorkoutDate = getLastWorkoutDate(data);
@@ -47,7 +50,7 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
     <div className="relative min-h-screen overflow-x-hidden bg-background text-foreground">
       <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(circle_at_top,_rgba(255,146,56,0.16),_transparent_28%),radial-gradient(circle_at_bottom_right,_rgba(46,179,163,0.08),_transparent_22%)]" />
       <div className="relative mx-auto flex min-h-screen max-w-[1500px] gap-5 px-4 pb-[calc(5.5rem+env(safe-area-inset-bottom))] pt-4 md:px-6 md:pt-6 xl:px-8">
-        <aside className="hidden w-[280px] shrink-0 lg:block">
+        <aside className="hidden w-[280px] shrink-0 xl:block">
           <div className="workspace-panel sticky top-6 flex flex-col gap-6 p-5">
             <Link href="/" className="flex items-center gap-4">
               <span className="flex h-12 w-12 items-center justify-center rounded-[20px] bg-primary/15 text-primary">
@@ -146,7 +149,7 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
         </aside>
 
         <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <header className="workspace-panel flex items-center justify-between gap-4 px-5 py-4 lg:hidden">
+          <header className="workspace-panel flex items-center justify-between gap-4 px-5 py-4 xl:hidden">
             <Link href="/" className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-[18px] bg-primary/15 text-primary">
                 <Dumbbell className="h-5 w-5" />
@@ -166,11 +169,27 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
             </Button>
           </header>
 
-          <main className="mx-auto w-full max-w-6xl flex-1">{children}</main>
+          <main className="mx-auto w-full max-w-6xl flex-1 space-y-4">
+            {!syncStatus.canWrite ? (
+              <div className="rounded-[22px] border border-warning/35 bg-warning/10 p-4 text-sm leading-6 text-warning">
+                <div className="flex gap-3">
+                  <WifiOff className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div>
+                    <p className="font-semibold text-foreground">Salvataggi cloud bloccati</p>
+                    <p className="mt-1 text-muted-foreground">
+                      {syncStatus.message ??
+                        "Il database unico non e disponibile. Puoi leggere ed esportare, ma non registrare nuovi dati reali in locale."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            {children}
+          </main>
         </div>
 
-        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08] bg-background/90 px-2 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl lg:hidden">
-          <div className="mx-auto grid max-w-xl grid-cols-5 gap-1">
+        <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-white/[0.08] bg-background/90 px-2 pb-[max(0.65rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl xl:hidden">
+          <div className="mx-auto grid max-w-2xl grid-cols-6 gap-1">
             {navItems.map((item) => {
               const Icon = item.icon;
               const active = isActivePath(pathname, item.href);

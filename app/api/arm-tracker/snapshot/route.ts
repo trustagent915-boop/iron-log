@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { readSupabaseSnapshot, writeSupabaseSnapshot } from "@/lib/arm-tracker/supabase-sync.server";
+import { isAuthorizedSnapshotRequest } from "@/lib/arm-tracker/snapshot-auth.server";
 import type { ArmTrackerData } from "@/lib/arm-tracker/types";
 
 export const dynamic = "force-dynamic";
@@ -24,7 +25,20 @@ function isArmTrackerData(value: unknown): value is ArmTrackerData {
   );
 }
 
-export async function GET() {
+export async function GET(request: Request) {
+  if (!isAuthorizedSnapshotRequest(request)) {
+    return NextResponse.json(
+      {
+        configured: true,
+        snapshot: null,
+        seedVersion: null,
+        updatedAt: null,
+        error: "Snapshot access requires an authenticated cloud session."
+      },
+      { status: 401 }
+    );
+  }
+
   try {
     const snapshot = await readSupabaseSnapshot();
     return NextResponse.json(snapshot);
@@ -43,6 +57,19 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  if (!isAuthorizedSnapshotRequest(request)) {
+    return NextResponse.json(
+      {
+        configured: true,
+        snapshot: null,
+        seedVersion: null,
+        updatedAt: null,
+        error: "Snapshot writes require an authenticated cloud session."
+      },
+      { status: 401 }
+    );
+  }
+
   let body: unknown;
 
   try {

@@ -10,13 +10,8 @@ import {
 } from "react";
 
 import { createCustomSession, importParsedPlan, saveWorkoutLogEntry } from "@/lib/arm-tracker/mutations";
-import { readWorkbook } from "@/lib/arm-tracker/excel-parser";
-import { parseHistoricalWorkbook } from "@/lib/arm-tracker/historical-workbook";
-import {
-  createIronLogHistorySeedData,
-  IRON_LOG_HISTORY_SEED_VERSION
-} from "@/lib/arm-tracker/iron-log-history-seed";
-import { fetchRemoteSnapshot, pushRemoteSnapshot } from "@/lib/arm-tracker/remote-sync";
+import { applyCompetitionPrepProgram } from "@/lib/arm-tracker/competition-prep-program";
+import { fetchRemoteSnapshot, importRemoteArchive, pushRemoteSnapshot } from "@/lib/arm-tracker/remote-sync";
 import { getActivePlan, getSessionDetails } from "@/lib/arm-tracker/selectors";
 import {
   ARM_TRACKER_STORAGE_EVENT,
@@ -24,9 +19,7 @@ import {
   db,
   exportArmTrackerArchive,
   getDataCounts,
-  hasStoredArmTrackerData,
-  importArmTrackerArchive,
-  importArmTrackerSnapshot
+  hasStoredArmTrackerData
 } from "@/lib/arm-tracker/storage";
 import type {
   ArmTrackerData,
@@ -43,52 +36,65 @@ import type {
 interface ArmTrackerContextValue {
   data: ArmTrackerData;
   isReady: boolean;
+  syncStatus: ArmTrackerSyncStatus;
   activePlan: ReturnType<typeof getActivePlan>;
   refresh: () => void;
-  importPlan: (input: ImportPlanInput) => ImportPlanResult;
-  createCustomSession: (input: CreateCustomSessionInput) => CreateCustomSessionResult;
-  saveWorkoutLog: (input: SaveWorkoutLogInput) => ReturnType<typeof saveWorkoutLogEntry>;
+  importPlan: (input: ImportPlanInput) => Promise<ImportPlanResult>;
+  createCustomSession: (input: CreateCustomSessionInput) => Promise<CreateCustomSessionResult>;
+  saveWorkoutLog: (input: SaveWorkoutLogInput) => Promise<ReturnType<typeof saveWorkoutLogEntry>>;
   exportArchive: () => ArmTrackerArchiveExport;
   importArchive: (file: File) => Promise<ArmTrackerArchiveImportResult>;
   findSessionDetails: (sessionId: string) => SessionDetails | null;
 }
 
+export interface ArmTrackerSyncStatus {
+  state: "checking" | "ready" | "blocked";
+  canWrite: boolean;
+  message: string | null;
+}
+
 const ArmTrackerContext = createContext<ArmTrackerContextValue | null>(null);
+
+const syncCheckingStatus: ArmTrackerSyncStatus = {
+  state: "checking",
+  canWrite: false,
+  message: "Controllo del cloud in corso: i salvataggi restano bloccati finche la sincronizzazione non e confermata."
+};
+
+const syncReadyStatus: ArmTrackerSyncStatus = {
+  state: "ready",
+  canWrite: true,
+  message: null
+};
+
+function createBlockedSyncStatus(message: string): ArmTrackerSyncStatus {
+  return {
+    state: "blocked",
+    canWrite: false,
+    message
+  };
+}
 
 export function ArmTrackerProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<ArmTrackerData>(createEmptyArmTrackerData());
   const [isReady, setIsReady] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<ArmTrackerSyncStatus>(syncCheckingStatus);
   const syncEnabledRef = useRef(true);
   const syncInitializedRef = useRef(false);
+  const manualCommitInFlightRef = useRef(false);
   const lastSyncedPayloadRef = useRef<string | null>(null);
 
-  function applySeedIfNeeded() {
-    const snapshot = db.getSnapshot();
-    const hasUserData = db.hasUserData(snapshot);
-    const hasCurrentSeed = db.getSeedVersion() === IRON_LOG_HISTORY_SEED_VERSION;
-
-    if (!hasCurrentSeed && !hasUserData) {
-      db.setSnapshot(createIronLogHistorySeedData());
-      db.setSeedVersion(IRON_LOG_HISTORY_SEED_VERSION);
-      return db.getSnapshot();
-    }
-
-    if (!hasCurrentSeed && hasUserData) {
-      importArmTrackerSnapshot(createIronLogHistorySeedData());
-      db.setSeedVersion(IRON_LOG_HISTORY_SEED_VERSION);
-      return db.getSnapshot();
-    }
-
-    return snapshot;
+  function applyLocalMigrations(snapshot: ArmTrackerData) {
+    return applyCompetitionPrepProgram(snapshot);
   }
 
   useEffect(() => {
     function syncFromStorage() {
-      setData(db.getSnapshot());
+      setData(applyLocalMigrations(db.getSnapshot()));
       setIsReady(true);
     }
 
-    const localSnapshot = applySeedIfNeeded();
+    const localSnapshot = applyLocalMigrations(db.getSnapshot());
     syncFromStorage();
 
     function handleStorageSync() {
@@ -106,6 +112,9 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
 
         if (!remote.configured) {
           syncEnabledRef.current = false;
+          setSyncStatus(createBlockedSyncStatus(
+            "Cloud non configurato: puoi leggere ed esportare i dati locali, ma non salvare nuovi allenamenti finche non colleghiamo il database unico."
+          ));
           syncInitializedRef.current = true;
           return;
         }
@@ -122,6 +131,7 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
         if (remoteHasData && (!localHasData || remoteLooksRicher)) {
           lastSyncedPayloadRef.current = JSON.stringify(remote.snapshot);
           db.setSnapshot(remote.snapshot!);
+          setSyncStatus(syncReadyStatus);
 
           if (remote.seedVersion?.trim()) {
             db.setSeedVersion(remote.seedVersion);
@@ -135,12 +145,21 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
 
           if (pushed.configured) {
             lastSyncedPayloadRef.current = JSON.stringify(localSnapshot);
+            setSyncStatus(syncReadyStatus);
           } else {
             syncEnabledRef.current = false;
+            setSyncStatus(createBlockedSyncStatus(
+              "Cloud non configurato: i salvataggi sono bloccati per evitare dati intrappolati su questo dispositivo."
+            ));
           }
+        } else {
+          setSyncStatus(syncReadyStatus);
         }
       } catch {
         syncEnabledRef.current = false;
+        setSyncStatus(createBlockedSyncStatus(
+          "Cloud non raggiungibile o non autorizzato: i salvataggi sono bloccati per evitare dati salvati solo in locale."
+        ));
       } finally {
         syncInitializedRef.current = true;
         syncFromStorage();
@@ -157,7 +176,12 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    if (!isReady || !syncInitializedRef.current || !syncEnabledRef.current) {
+    if (
+      !isReady ||
+      !syncInitializedRef.current ||
+      !syncEnabledRef.current ||
+      manualCommitInFlightRef.current
+    ) {
       return;
     }
 
@@ -178,12 +202,18 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
 
         if (!result.configured) {
           syncEnabledRef.current = false;
+          setSyncStatus(createBlockedSyncStatus(
+            "Cloud non configurato: i salvataggi sono bloccati finche non colleghiamo il database unico."
+          ));
           return;
         }
 
         lastSyncedPayloadRef.current = payload;
       } catch {
         syncEnabledRef.current = false;
+        setSyncStatus(createBlockedSyncStatus(
+          "Ultimo salvataggio cloud non riuscito: i nuovi salvataggi sono bloccati finche la sincronizzazione non torna sana."
+        ));
       }
     }, 400);
 
@@ -198,22 +228,60 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
     setIsReady(true);
   }
 
-  function importPlan(input: ImportPlanInput) {
-    const result = importParsedPlan(input);
-    refresh();
-    return result;
+  function assertCloudWriteEnabled() {
+    if (!syncStatus.canWrite) {
+      throw new Error(syncStatus.message ?? "Salvataggio cloud non disponibile.");
+    }
   }
 
-  function createSession(input: CreateCustomSessionInput) {
-    const result = createCustomSession(input);
-    refresh();
-    return result;
+  async function commitMutationToCloud<T>(mutation: () => T): Promise<T> {
+    assertCloudWriteEnabled();
+    const previousSnapshot = db.getSnapshot();
+    const seedVersion = db.getSeedVersion();
+
+    manualCommitInFlightRef.current = true;
+
+    try {
+      const result = mutation();
+      const nextSnapshot = db.getSnapshot();
+      const pushed = await pushRemoteSnapshot({
+        snapshot: nextSnapshot,
+        seedVersion
+      });
+
+      if (!pushed.configured) {
+        throw new Error("Cloud non configurato: salvataggio annullato.");
+      }
+
+      const confirmedSnapshot = pushed.snapshot ?? nextSnapshot;
+      lastSyncedPayloadRef.current = JSON.stringify(confirmedSnapshot);
+      db.setSnapshot(confirmedSnapshot);
+      setSyncStatus(syncReadyStatus);
+      refresh();
+      return result;
+    } catch (error) {
+      db.setSnapshot(previousSnapshot);
+      syncEnabledRef.current = false;
+      setSyncStatus(createBlockedSyncStatus(
+        "Salvataggio cloud fallito: ho ripristinato lo stato precedente per evitare dati salvati solo su questo dispositivo."
+      ));
+      refresh();
+      throw error;
+    } finally {
+      manualCommitInFlightRef.current = false;
+    }
   }
 
-  function saveWorkoutLog(input: SaveWorkoutLogInput) {
-    const result = saveWorkoutLogEntry(input);
-    refresh();
-    return result;
+  async function importPlan(input: ImportPlanInput) {
+    return commitMutationToCloud(() => importParsedPlan(input));
+  }
+
+  async function createSession(input: CreateCustomSessionInput) {
+    return commitMutationToCloud(() => createCustomSession(input));
+  }
+
+  async function saveWorkoutLog(input: SaveWorkoutLogInput) {
+    return commitMutationToCloud(() => saveWorkoutLogEntry(input));
   }
 
   function exportArchive() {
@@ -225,14 +293,19 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
     let result: ArmTrackerArchiveImportResult;
 
     if (lowerName.endsWith(".json")) {
+      assertCloudWriteEnabled();
       const payload = await file.text();
-      result = importArmTrackerArchive(payload);
-    } else if (lowerName.endsWith(".xls") || lowerName.endsWith(".xlsx")) {
-      const buffer = await file.arrayBuffer();
-      const workbook = readWorkbook(buffer);
-      result = importArmTrackerSnapshot(parseHistoricalWorkbook(workbook));
+      const remoteResult = await importRemoteArchive({ payload });
+
+      result = {
+        exportedAt: remoteResult.exportedAt,
+        counts: remoteResult.counts,
+        added: remoteResult.added
+      };
+      lastSyncedPayloadRef.current = JSON.stringify(remoteResult.snapshot);
+      db.setSnapshot(remoteResult.snapshot);
     } else {
-      throw new Error("Formato non supportato. Usa un archivio JSON o un workbook storico Iron Log.");
+      throw new Error("Formato non supportato. Usa un archivio JSON esportato da Iron Log.");
     }
 
     refresh();
@@ -248,6 +321,7 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
       value={{
         data,
         isReady,
+        syncStatus,
         activePlan: getActivePlan(data),
         refresh,
         importPlan,

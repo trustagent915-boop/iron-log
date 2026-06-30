@@ -2,7 +2,7 @@
 
 import type { Route } from "next";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ import {
 } from "@/lib/arm-tracker/selectors";
 
 interface ExerciseDraft {
+  exerciseName: string;
   actualSets: string;
   actualReps: string;
   actualWeight: string;
@@ -36,14 +37,19 @@ function toFieldValue(value: number | null) {
 export default function LogWorkoutPage() {
   const params = useParams<{ sessionId: string }>();
   const router = useRouter();
-  const { findSessionDetails, isReady, saveWorkoutLog } = useArmTracker();
+  const { findSessionDetails, isReady, saveWorkoutLog, syncStatus } = useArmTracker();
   const [performedDate, setPerformedDate] = useState("");
+  const [bodyweightInput, setBodyweightInput] = useState("");
   const [overallNotes, setOverallNotes] = useState("");
   const [drafts, setDrafts] = useState<Record<string, ExerciseDraft>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
-  const details = sessionId ? findSessionDetails(sessionId) : null;
+  const details = useMemo(
+    () => (sessionId ? findSessionDetails(sessionId) : null),
+    [findSessionDetails, sessionId]
+  );
 
   useEffect(() => {
     const currentDetails = details;
@@ -53,6 +59,7 @@ export default function LogWorkoutPage() {
     }
 
     setPerformedDate(currentDetails.workoutLog?.performedDate ?? currentDetails.session.sessionDate);
+    setBodyweightInput(toFieldValue(currentDetails.workoutLog?.bodyweightKg ?? null));
     setOverallNotes(currentDetails.workoutLog?.overallNotes ?? "");
     setDrafts(
       currentDetails.exercises.reduce<Record<string, ExerciseDraft>>((accumulator, exercise) => {
@@ -61,6 +68,7 @@ export default function LogWorkoutPage() {
         );
 
         accumulator[exercise.id] = {
+          exerciseName: existingExerciseLog?.exerciseNameSnapshot ?? exercise.exerciseName,
           actualSets: toFieldValue(existingExerciseLog?.actualSets ?? null),
           actualReps: toFieldValue(existingExerciseLog?.actualReps ?? null),
           actualWeight: toFieldValue(existingExerciseLog?.actualWeight ?? null),
@@ -103,19 +111,22 @@ export default function LogWorkoutPage() {
     }));
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     setIsSaving(true);
+    setErrorMessage(null);
 
     try {
-      saveWorkoutLog({
+      await saveWorkoutLog({
         sessionId: sessionDetails.session.id,
         performedDate,
+        bodyweightKg: parseInputNumber(bodyweightInput),
         overallNotes,
         exercises: sessionDetails.exercises.map((exercise) => {
           const draft = drafts[exercise.id];
 
           return {
             planExerciseId: exercise.id,
+            exerciseNameSnapshot: draft?.exerciseName ?? exercise.exerciseName,
             actualSets: parseInputNumber(draft?.actualSets ?? ""),
             actualReps: parseInputNumber(draft?.actualReps ?? ""),
             actualWeight: parseInputNumber(draft?.actualWeight ?? ""),
@@ -126,6 +137,8 @@ export default function LogWorkoutPage() {
       });
 
       router.push("/" as Route);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Salvataggio cloud non riuscito.");
     } finally {
       setIsSaving(false);
     }
@@ -148,7 +161,17 @@ export default function LogWorkoutPage() {
         <Card>
           <CardContent className="p-6 text-sm text-warning">
             Nessun set pianificato trovato in questa sessione. Se i dati arrivano
-            incompleti, valuta una reimportazione del file Excel.
+            incompleti, valuta una reimportazione del programma in CSV.
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {!syncStatus.canWrite ? (
+        <Card>
+          <CardContent className="p-6 text-sm leading-7 text-muted-foreground">
+            <span className="font-semibold text-foreground">Salvataggio disattivato.</span>{" "}
+            {syncStatus.message ??
+              "Il cloud non e disponibile: il workout non verra salvato solo su questo dispositivo."}
           </CardContent>
         </Card>
       ) : null}
@@ -157,7 +180,7 @@ export default function LogWorkoutPage() {
         <CardHeader>
           <CardTitle>Dati generali</CardTitle>
         </CardHeader>
-        <CardContent className="grid gap-4 md:grid-cols-[220px_1fr]">
+        <CardContent className="grid gap-4 md:grid-cols-[220px_220px_1fr]">
           <div className="space-y-2">
             <label htmlFor="performed-date" className="text-sm font-medium text-foreground">
               Data esecuzione
@@ -168,6 +191,19 @@ export default function LogWorkoutPage() {
               type="date"
               value={performedDate}
               onChange={(event) => setPerformedDate(event.target.value)}
+            />
+          </div>
+          <div className="space-y-2">
+            <label htmlFor="bodyweight-kg" className="text-sm font-medium text-foreground">
+              Peso corporeo (kg)
+            </label>
+            <Input
+              id="bodyweight-kg"
+              name="bodyweight-kg"
+              inputMode="decimal"
+              value={bodyweightInput}
+              onChange={(event) => setBodyweightInput(event.target.value)}
+              placeholder="90"
             />
           </div>
           <div className="space-y-2">
@@ -188,6 +224,7 @@ export default function LogWorkoutPage() {
       <div className="space-y-4">
         {sessionDetails.exercises.map((exercise) => {
           const draft = drafts[exercise.id] ?? {
+            exerciseName: exercise.exerciseName,
             actualSets: "",
             actualReps: "",
             actualWeight: "",
@@ -224,6 +261,23 @@ export default function LogWorkoutPage() {
                 </Button>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <label
+                    htmlFor={`exercise-name-${exercise.id}`}
+                    className="text-sm font-medium text-foreground"
+                  >
+                    Esercizio registrato
+                  </label>
+                  <Input
+                    id={`exercise-name-${exercise.id}`}
+                    name={`exercise-name-${exercise.id}`}
+                    value={draft.exerciseName}
+                    onChange={(event) =>
+                      updateDraft(exercise.id, { exerciseName: event.target.value })
+                    }
+                    disabled={draft.skipped}
+                  />
+                </div>
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
                     <label
@@ -304,8 +358,14 @@ export default function LogWorkoutPage() {
         })}
       </div>
 
+      {errorMessage ? (
+        <Card>
+          <CardContent className="p-6 text-sm text-destructive">{errorMessage}</CardContent>
+        </Card>
+      ) : null}
+
       <div className="flex flex-wrap gap-3">
-        <Button onClick={handleSubmit} disabled={isSaving || !performedDate}>
+        <Button onClick={handleSubmit} disabled={isSaving || !performedDate || !syncStatus.canWrite}>
           {isSaving ? "Salvataggio..." : "Salva allenamento"}
         </Button>
         <Button

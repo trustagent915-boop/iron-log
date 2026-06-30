@@ -1,5 +1,3 @@
-import * as XLSX from "xlsx";
-
 import { sanitizeText } from "@/lib/utils";
 import type { ColumnMapping, MappingCompleteness, ParsedRow, ParsedSheetResult } from "@/lib/arm-tracker/types";
 
@@ -15,6 +13,11 @@ const columnAliases: Record<keyof ColumnMapping, string[]> = {
 };
 
 type SheetCell = string | number | Date | boolean | null | undefined;
+
+export interface ParsedWorkbook {
+  SheetNames: string[];
+  Sheets: Record<string, SheetCell[][]>;
+}
 
 function normalizeLabel(value: string) {
   return value
@@ -33,19 +36,14 @@ function sanitizeHeaderCell(value: SheetCell) {
   return String(value).trim();
 }
 
-function extractSheetRows(workbook: XLSX.WorkBook, sheetName: string) {
+function extractSheetRows(workbook: ParsedWorkbook, sheetName: string) {
   const sheet = workbook.Sheets[sheetName];
 
   if (!sheet) {
     return { headerRowIndex: -1, rows: [] as SheetCell[][] };
   }
 
-  const rows = XLSX.utils.sheet_to_json<SheetCell[]>(sheet, {
-    header: 1,
-    raw: true,
-    blankrows: false,
-    defval: null
-  });
+  const rows = sheet.filter((row) => row.some((cell) => sanitizeHeaderCell(cell)));
 
   const headerRowIndex = rows.findIndex((row) => row.some((cell) => sanitizeHeaderCell(cell)));
 
@@ -73,13 +71,14 @@ export function parseExcelDate(value: SheetCell): string | null {
   }
 
   if (typeof value === "number" && Number.isFinite(value)) {
-    const parsedDate = XLSX.SSF.parse_date_code(value);
+    const excelEpoch = Date.UTC(1899, 11, 30);
+    const parsedDate = new Date(excelEpoch + value * 24 * 60 * 60 * 1000);
 
-    if (!parsedDate) {
+    if (Number.isNaN(parsedDate.getTime())) {
       return null;
     }
 
-    return toIsoDate(parsedDate.y, parsedDate.m, parsedDate.d);
+    return parsedDate.toISOString().slice(0, 10);
   }
 
   const textValue = sanitizeText(value === null || value === undefined ? "" : String(value), 80);
@@ -169,11 +168,72 @@ function getCellValue(row: SheetCell[], headers: string[], headerName: string | 
   return columnIndex >= 0 ? row[columnIndex] : null;
 }
 
-export function readWorkbook(buffer: ArrayBuffer) {
-  return XLSX.read(buffer, { type: "array", cellDates: true });
+function parseCsvLine(line: string) {
+  const cells: string[] = [];
+  let currentCell = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    const nextCharacter = line[index + 1];
+
+    if (character === '"' && nextCharacter === '"') {
+      currentCell += '"';
+      index += 1;
+      continue;
+    }
+
+    if (character === '"') {
+      inQuotes = !inQuotes;
+      continue;
+    }
+
+    if ((character === "," || character === ";") && !inQuotes) {
+      cells.push(currentCell.trim());
+      currentCell = "";
+      continue;
+    }
+
+    currentCell += character;
+  }
+
+  cells.push(currentCell.trim());
+  return cells;
 }
 
-export function getSheetNames(workbook: XLSX.WorkBook) {
+function parseCsv(text: string) {
+  return text
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((line) => parseCsvLine(line))
+    .filter((row) => row.some((cell) => cell.trim()));
+}
+
+export function readWorkbook(buffer: ArrayBuffer, fileName = "programma.csv"): ParsedWorkbook {
+  const bytes = new Uint8Array(buffer);
+  const header = Array.from(bytes.slice(0, 4))
+    .map((byte) => String.fromCharCode(byte))
+    .join("");
+
+  if (header.startsWith("PK")) {
+    throw new Error("Import Excel disattivato per sicurezza: esporta il foglio in CSV e riprova.");
+  }
+
+  const text = new TextDecoder("utf-8", { fatal: false }).decode(buffer);
+
+  if (!text.trim() || text.includes("\u0000")) {
+    throw new Error("File non leggibile come CSV. Esporta il programma in .csv e riprova.");
+  }
+
+  return {
+    SheetNames: [fileName.replace(/\.[^.]+$/, "") || "CSV"],
+    Sheets: {
+      [fileName.replace(/\.[^.]+$/, "") || "CSV"]: parseCsv(text)
+    }
+  };
+}
+
+export function getSheetNames(workbook: ParsedWorkbook) {
   return workbook.SheetNames;
 }
 
@@ -186,7 +246,7 @@ export function getSuggestedSheetName(sheetNames: string[]) {
   );
 }
 
-export function getSheetHeaders(workbook: XLSX.WorkBook, sheetName: string) {
+export function getSheetHeaders(workbook: ParsedWorkbook, sheetName: string) {
   const { headerRowIndex, rows } = extractSheetRows(workbook, sheetName);
 
   if (headerRowIndex < 0) {
@@ -251,7 +311,7 @@ export function getMappingCompleteness(mapping: ColumnMapping): MappingCompleten
   };
 }
 
-export function parseSheet(workbook: XLSX.WorkBook, sheetName: string, mapping: ColumnMapping): ParsedSheetResult {
+export function parseSheet(workbook: ParsedWorkbook, sheetName: string, mapping: ColumnMapping): ParsedSheetResult {
   const { headerRowIndex, rows } = extractSheetRows(workbook, sheetName);
 
   if (headerRowIndex < 0) {

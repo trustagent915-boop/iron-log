@@ -211,6 +211,8 @@ export function saveWorkoutLogEntry(input: SaveWorkoutLogInput) {
     const submittedExercise = exerciseInputMap.get(planExercise.id);
     const skipped = submittedExercise?.skipped ?? false;
     const trimmedNotes = sanitizeText(submittedExercise?.notes ?? "", 240) || null;
+    const exerciseNameSnapshot =
+      sanitizeText(submittedExercise?.exerciseNameSnapshot ?? "", 120) || planExercise.exerciseName;
     const actualReps = skipped ? null : submittedExercise?.actualReps ?? null;
     const actualWeight = skipped ? null : submittedExercise?.actualWeight ?? null;
     const explicitSets = skipped ? null : submittedExercise?.actualSets ?? null;
@@ -220,7 +222,7 @@ export function saveWorkoutLogEntry(input: SaveWorkoutLogInput) {
       id: crypto.randomUUID(),
       workoutLogId,
       planExerciseId: planExercise.id,
-      exerciseNameSnapshot: planExercise.exerciseName,
+      exerciseNameSnapshot,
       plannedSetsSnapshot: planExercise.plannedSets,
       plannedRepsSnapshot: planExercise.plannedReps,
       plannedWeightSnapshot: planExercise.plannedWeight,
@@ -241,6 +243,7 @@ export function saveWorkoutLogEntry(input: SaveWorkoutLogInput) {
     id: workoutLogId,
     planSessionId: session.id,
     performedDate: input.performedDate,
+    bodyweightKg: input.bodyweightKg ?? null,
     overallNotes: sanitizeText(input.overallNotes ?? "", 400) || null,
     completionStatus,
     createdAt: latestLog?.createdAt ?? submittedAt
