@@ -113,8 +113,8 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex w-[240px] flex-col border-r border-white/[0.06] bg-[#0d1118] transition-transform duration-200",
-          "lg:translate-x-0",
-          mobileNavOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
+          "md:translate-x-0",
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
         )}
       >
         <div className="flex h-14 items-center justify-between border-b border-white/[0.06] px-5">
@@ -127,7 +127,7 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={() => setMobileNavOpen(false)}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] lg:hidden"
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] md:hidden"
             aria-label="Chiudi menu"
           >
             <X className="h-4 w-4" />
@@ -210,18 +210,18 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
 
       {mobileNavOpen ? (
         <div
-          className="fixed inset-0 z-30 bg-black/60 lg:hidden"
+          className="fixed inset-0 z-30 bg-black/60 md:hidden"
           onClick={() => setMobileNavOpen(false)}
         />
       ) : null}
 
-      <div className="relative lg:pl-[240px]">
+      <div className="relative md:pl-[240px]">
         <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-white/[0.06] bg-background/85 px-4 backdrop-blur-xl md:px-6">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setMobileNavOpen(true)}
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] lg:hidden"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] md:hidden"
               aria-label="Apri menu"
             >
               <Menu className="h-5 w-5" />
