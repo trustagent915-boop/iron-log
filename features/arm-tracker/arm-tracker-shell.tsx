@@ -76,19 +76,37 @@ function getPageTitle(pathname: string, fallback: string) {
   return fallback;
 }
 
-function SyncBadge({ canWrite, message }: { canWrite: boolean; message: string | null }) {
+function SyncBadge({
+  state,
+  canWrite,
+  message
+}: {
+  state: "checking" | "ready" | "blocked";
+  canWrite: boolean;
+  message: string | null;
+}) {
+  const isChecking = state === "checking";
+  const label = canWrite ? "Cloud sync attivo" : isChecking ? "Sync in corso..." : "Cloud bloccato";
+  const tone = canWrite
+    ? "border-success/30 bg-success/10 text-success"
+    : isChecking
+      ? "border-muted-foreground/30 bg-white/[0.03] text-muted-foreground"
+      : "border-warning/30 bg-warning/10 text-warning";
+
   return (
     <div
       className={cn(
         "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium",
-        canWrite
-          ? "border-success/30 bg-success/10 text-success"
-          : "border-warning/30 bg-warning/10 text-warning"
+        tone
       )}
       title={message ?? undefined}
     >
-      {canWrite ? <Cloud className="h-3.5 w-3.5" /> : <CloudOff className="h-3.5 w-3.5" />}
-      <span>{canWrite ? "Cloud sync attivo" : "Cloud bloccato"}</span>
+      {canWrite || isChecking ? (
+        <Cloud className="h-3.5 w-3.5" />
+      ) : (
+        <CloudOff className="h-3.5 w-3.5" />
+      )}
+      <span>{label}</span>
     </div>
   );
 }
@@ -113,8 +131,8 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-40 flex w-[240px] flex-col border-r border-white/[0.06] bg-[#0d1118] transition-transform duration-200",
-          "md:translate-x-0",
-          mobileNavOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+          "sm:translate-x-0",
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full sm:translate-x-0"
         )}
       >
         <div className="flex h-14 items-center justify-between border-b border-white/[0.06] px-5">
@@ -127,7 +145,7 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
           <button
             type="button"
             onClick={() => setMobileNavOpen(false)}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] md:hidden"
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] sm:hidden"
             aria-label="Chiudi menu"
           >
             <X className="h-4 w-4" />
@@ -210,18 +228,18 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
 
       {mobileNavOpen ? (
         <div
-          className="fixed inset-0 z-30 bg-black/60 md:hidden"
+          className="fixed inset-0 z-30 bg-black/60 sm:hidden"
           onClick={() => setMobileNavOpen(false)}
         />
       ) : null}
 
-      <div className="relative md:pl-[240px]">
+      <div className="relative sm:pl-[240px]">
         <header className="sticky top-0 z-20 flex h-14 items-center justify-between gap-3 border-b border-white/[0.06] bg-background/85 px-4 backdrop-blur-xl md:px-6">
           <div className="flex items-center gap-3">
             <button
               type="button"
               onClick={() => setMobileNavOpen(true)}
-              className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] md:hidden"
+              className="rounded-md p-1.5 text-muted-foreground hover:bg-white/[0.05] sm:hidden"
               aria-label="Apri menu"
             >
               <Menu className="h-5 w-5" />
@@ -239,8 +257,12 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2">
-            <SyncBadge canWrite={syncStatus.canWrite} message={syncStatus.message} />
-            <Button asChild size="sm" variant="outline" className="hidden md:inline-flex">
+            <SyncBadge
+              state={syncStatus.state}
+              canWrite={syncStatus.canWrite}
+              message={syncStatus.message}
+            />
+            <Button asChild size="sm" variant="outline" className="hidden sm:inline-flex">
               <Link href={"/custom-workout/new" as Route}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" />
                 Nuovo workout
