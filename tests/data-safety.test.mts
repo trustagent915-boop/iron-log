@@ -203,3 +203,30 @@ test("default target exercises are still exposed for the dashboard seed", () => 
   assert.ok(LEVEL_100_TARGET_EXERCISES.includes("Squat"));
   assert.ok(LEVEL_100_TARGET_EXERCISES.includes("One Arm Pull Up Iso"));
 });
+
+test("merge accepts legacy v2 snapshots (missing deletedIds/level100Watchlist) without crashing", () => {
+  const legacyRemote = {
+    plans: [
+      {
+        id: "plan-legacy",
+        name: "Programma vecchio",
+        sourceFileName: "old.xlsx",
+        importedAt: "2026-04-01T00:00:00.000Z",
+        status: "active"
+      }
+    ],
+    sessions: [],
+    exercises: [],
+    workoutLogs: [makeWorkoutLog("legacy-log")],
+    exerciseLogs: [],
+    importRuns: []
+  } as unknown as ArmTrackerData;
+
+  const localFresh = makeSnapshot();
+  const merged = mergeArmTrackerSnapshots(localFresh, legacyRemote);
+
+  assert.equal(merged.plans.length, 1);
+  assert.equal(merged.workoutLogs.length, 1);
+  assert.deepEqual(merged.deletedIds.workoutLogs, []);
+  assert.deepEqual(merged.level100Watchlist, []);
+});

@@ -520,17 +520,23 @@ function mergeDeletedIds(
 }
 
 function mergeSnapshots(current: ArmTrackerData, incoming: ArmTrackerData) {
-  const deletedIds = mergeDeletedIds(current.deletedIds, incoming.deletedIds);
+  // Old cloud snapshots (schema v2) do not have deletedIds or level100Watchlist.
+  // Normalize both sides so every field is guaranteed to exist before merging.
+  const normalizedCurrent = normalizeSnapshot(current as Partial<ArmTrackerData>);
+  const normalizedIncoming = normalizeSnapshot(incoming as Partial<ArmTrackerData>);
+  const deletedIds = mergeDeletedIds(normalizedCurrent.deletedIds, normalizedIncoming.deletedIds);
   const level100Watchlist =
-    incoming.level100Watchlist.length > 0 ? incoming.level100Watchlist : current.level100Watchlist;
+    normalizedIncoming.level100Watchlist.length > 0
+      ? normalizedIncoming.level100Watchlist
+      : normalizedCurrent.level100Watchlist;
 
   return normalizeSnapshot({
-    plans: mergeById(current.plans, incoming.plans),
-    sessions: mergeById(current.sessions, incoming.sessions),
-    exercises: mergeById(current.exercises, incoming.exercises),
-    workoutLogs: mergeById(current.workoutLogs, incoming.workoutLogs),
-    exerciseLogs: mergeById(current.exerciseLogs, incoming.exerciseLogs),
-    importRuns: mergeById(current.importRuns, incoming.importRuns),
+    plans: mergeById(normalizedCurrent.plans, normalizedIncoming.plans),
+    sessions: mergeById(normalizedCurrent.sessions, normalizedIncoming.sessions),
+    exercises: mergeById(normalizedCurrent.exercises, normalizedIncoming.exercises),
+    workoutLogs: mergeById(normalizedCurrent.workoutLogs, normalizedIncoming.workoutLogs),
+    exerciseLogs: mergeById(normalizedCurrent.exerciseLogs, normalizedIncoming.exerciseLogs),
+    importRuns: mergeById(normalizedCurrent.importRuns, normalizedIncoming.importRuns),
     level100Watchlist,
     deletedIds
   });
