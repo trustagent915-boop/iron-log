@@ -771,7 +771,9 @@ export function filterDataByYear(data: ArmTrackerData, year: number | "all") {
     exercises,
     workoutLogs,
     exerciseLogs,
-    importRuns
+    importRuns,
+    level100Watchlist: data.level100Watchlist,
+    deletedIds: data.deletedIds
   };
 }
 

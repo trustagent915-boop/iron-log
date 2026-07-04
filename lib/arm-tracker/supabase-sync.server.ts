@@ -1,4 +1,4 @@
-import { createEmptyArmTrackerData } from "@/lib/arm-tracker/storage";
+import { createEmptyArmTrackerData, mergeArmTrackerSnapshots } from "@/lib/arm-tracker/storage";
 import type { ArmTrackerData } from "@/lib/arm-tracker/types";
 
 interface SupabaseSyncConfig {
@@ -69,28 +69,13 @@ function hasSnapshotData(snapshot: ArmTrackerData) {
     snapshot.exercises.length > 0 ||
     snapshot.workoutLogs.length > 0 ||
     snapshot.exerciseLogs.length > 0 ||
-    snapshot.importRuns.length > 0
+    snapshot.importRuns.length > 0 ||
+    (snapshot.level100Watchlist?.length ?? 0) > 0
   );
 }
 
-function mergeById<T extends { id: string }>(current: T[], incoming: T[]) {
-  const mergedMap = new Map<string, T>();
-
-  current.forEach((item) => mergedMap.set(item.id, item));
-  incoming.forEach((item) => mergedMap.set(item.id, item));
-
-  return [...mergedMap.values()];
-}
-
 function mergeSnapshotsForZeroLoss(current: ArmTrackerData, incoming: ArmTrackerData): ArmTrackerData {
-  return {
-    plans: mergeById(current.plans, incoming.plans),
-    sessions: mergeById(current.sessions, incoming.sessions),
-    exercises: mergeById(current.exercises, incoming.exercises),
-    workoutLogs: mergeById(current.workoutLogs, incoming.workoutLogs),
-    exerciseLogs: mergeById(current.exerciseLogs, incoming.exerciseLogs),
-    importRuns: mergeById(current.importRuns, incoming.importRuns)
-  };
+  return mergeArmTrackerSnapshots(current, incoming);
 }
 
 async function insertSnapshotVersion(

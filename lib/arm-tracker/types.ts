@@ -55,6 +55,7 @@ export interface WorkoutExerciseLog {
   actualWeight: number | null;
   actualReps: number | null;
   actualSets: number | null;
+  actualSeconds: number | null;
   notes: string | null;
   performedOrder: number;
 }
@@ -111,6 +112,15 @@ export interface MappingCompleteness {
   totalCount: number;
 }
 
+export interface ArmTrackerDeletedIds {
+  plans: string[];
+  sessions: string[];
+  exercises: string[];
+  workoutLogs: string[];
+  exerciseLogs: string[];
+  importRuns: string[];
+}
+
 export interface ArmTrackerData {
   plans: Plan[];
   sessions: PlanSession[];
@@ -118,6 +128,8 @@ export interface ArmTrackerData {
   workoutLogs: WorkoutLog[];
   exerciseLogs: WorkoutExerciseLog[];
   importRuns: ImportRun[];
+  level100Watchlist: string[];
+  deletedIds: ArmTrackerDeletedIds;
 }
 
 export interface ArmTrackerDataCounts {
@@ -209,6 +221,7 @@ export interface WorkoutExerciseInput {
   actualWeight: number | null;
   actualReps: number | null;
   actualSets: number | null;
+  actualSeconds: number | null;
   notes: string | null;
   skipped: boolean;
 }

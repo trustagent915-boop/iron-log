@@ -38,7 +38,12 @@ function deriveSessionDate(row: ParsedRow, sessionIndex: number, fallbackWarning
 }
 
 function hasExerciseInput(exerciseLog: WorkoutExerciseLog) {
-  return exerciseLog.actualSets !== null || exerciseLog.actualReps !== null || exerciseLog.actualWeight !== null;
+  return (
+    exerciseLog.actualSets !== null ||
+    exerciseLog.actualReps !== null ||
+    exerciseLog.actualWeight !== null ||
+    exerciseLog.actualSeconds !== null
+  );
 }
 
 function getActivePlanFromSnapshot(snapshot: ReturnType<typeof db.getSnapshot>) {
@@ -192,6 +197,68 @@ export function createCustomSession(input: CreateCustomSessionInput): CreateCust
   return { session, exercises };
 }
 
+export function addWatchlistExerciseMutation(exerciseName: string) {
+  const snapshot = db.getSnapshot();
+  const trimmed = sanitizeText(exerciseName, 120).trim();
+
+  if (!trimmed) {
+    return snapshot;
+  }
+
+  if (snapshot.level100Watchlist.some((existing) => existing === trimmed)) {
+    return snapshot;
+  }
+
+  db.setSnapshot({
+    ...snapshot,
+    level100Watchlist: [...snapshot.level100Watchlist, trimmed]
+  });
+
+  return db.getSnapshot();
+}
+
+export function removeWatchlistExerciseMutation(exerciseName: string) {
+  const snapshot = db.getSnapshot();
+  const trimmed = exerciseName.trim();
+
+  if (!snapshot.level100Watchlist.some((existing) => existing === trimmed)) {
+    return snapshot;
+  }
+
+  db.setSnapshot({
+    ...snapshot,
+    level100Watchlist: snapshot.level100Watchlist.filter((existing) => existing !== trimmed)
+  });
+
+  return db.getSnapshot();
+}
+
+export function deleteWorkoutLogMutation(workoutLogId: string) {
+  const snapshot = db.getSnapshot();
+  const log = snapshot.workoutLogs.find((entry) => entry.id === workoutLogId);
+
+  if (!log) {
+    return snapshot;
+  }
+
+  const exerciseLogIds = snapshot.exerciseLogs
+    .filter((entry) => entry.workoutLogId === workoutLogId)
+    .map((entry) => entry.id);
+
+  db.setSnapshot({
+    ...snapshot,
+    workoutLogs: snapshot.workoutLogs.filter((entry) => entry.id !== workoutLogId),
+    exerciseLogs: snapshot.exerciseLogs.filter((entry) => entry.workoutLogId !== workoutLogId),
+    deletedIds: {
+      ...snapshot.deletedIds,
+      workoutLogs: [...snapshot.deletedIds.workoutLogs, workoutLogId],
+      exerciseLogs: [...snapshot.deletedIds.exerciseLogs, ...exerciseLogIds]
+    }
+  });
+
+  return db.getSnapshot();
+}
+
 export function saveWorkoutLogEntry(input: SaveWorkoutLogInput) {
   const snapshot = db.getSnapshot();
   const session = snapshot.sessions.find((item) => item.id === input.sessionId);
@@ -215,6 +282,7 @@ export function saveWorkoutLogEntry(input: SaveWorkoutLogInput) {
       sanitizeText(submittedExercise?.exerciseNameSnapshot ?? "", 120) || planExercise.exerciseName;
     const actualReps = skipped ? null : submittedExercise?.actualReps ?? null;
     const actualWeight = skipped ? null : submittedExercise?.actualWeight ?? null;
+    const actualSeconds = skipped ? null : submittedExercise?.actualSeconds ?? null;
     const explicitSets = skipped ? null : submittedExercise?.actualSets ?? null;
     const actualSets = skipped || (explicitSets === null && actualReps === null && actualWeight === null) ? explicitSets : explicitSets ?? planExercise.plannedSets ?? null;
 
@@ -230,6 +298,7 @@ export function saveWorkoutLogEntry(input: SaveWorkoutLogInput) {
       actualWeight,
       actualReps,
       actualSets,
+      actualSeconds,
       notes: skipped ? `${skippedNoteToken} ${trimmedNotes ?? ""}`.trim() : trimmedNotes,
       performedOrder: index
     };
