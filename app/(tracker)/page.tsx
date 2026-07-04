@@ -1167,7 +1167,7 @@ export default function DashboardPage() {
 
   return (
     <div className="page-enter space-y-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.025] p-4 lg:col-span-1">
           <label
             htmlFor="level-100-bodyweight"
@@ -1213,7 +1213,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_320px]">
+      <div className="grid gap-4 xl:grid-cols-[1fr_320px]">
         <div className="space-y-4">
           <div className="surface p-4">
             <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -1261,7 +1261,7 @@ export default function DashboardPage() {
               </p>
             </div>
           ) : (
-            <div className="grid gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
               {level100RankedExercises.map((exercise, index) => {
                 const isSelected =
                   exercise.exerciseName === selectedLevel100Exercise?.exerciseName;
@@ -1281,7 +1281,7 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <aside className="space-y-4 lg:sticky lg:top-[4.5rem] lg:self-start">
+        <aside className="space-y-4 xl:sticky xl:top-[4.5rem] xl:self-start">
           {selectedLevel100Exercise ? (
             <Level100RecordDetail
               exercise={selectedLevel100Exercise}
