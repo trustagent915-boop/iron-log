@@ -1,7 +1,5 @@
 import type { ReactNode } from "react";
 
-import { Badge } from "@/components/ui/badge";
-
 export function PageHeader({
   eyebrow,
   title,
@@ -9,24 +7,34 @@ export function PageHeader({
   actions
 }: {
   eyebrow?: string;
-  title: string;
-  description: string;
+  title?: string;
+  description?: string;
   actions?: ReactNode;
 }) {
+  if (!title && !description && !actions && !eyebrow) {
+    return null;
+  }
+
   return (
-    <div className="flex flex-col gap-5 border-b border-white/[0.08] pb-7 lg:flex-row lg:items-end lg:justify-between">
-      <div className="space-y-4">
-        {eyebrow ? <Badge className="eyebrow">{eyebrow}</Badge> : null}
-        <div className="space-y-3">
-          <h1 className="max-w-4xl text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
-            {title}
-          </h1>
-          <p className="max-w-3xl text-sm leading-7 text-muted-foreground sm:text-base">
-            {description}
+    <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <div className="min-w-0 space-y-1">
+        {eyebrow ? (
+          <p className="text-[10px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">
+            {eyebrow}
           </p>
-        </div>
+        ) : null}
+        {title ? (
+          <h2 className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">
+            {title}
+          </h2>
+        ) : null}
+        {description ? (
+          <p className="max-w-3xl text-sm leading-6 text-muted-foreground">{description}</p>
+        ) : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-3 lg:justify-end">{actions}</div> : null}
+      {actions ? (
+        <div className="flex flex-wrap items-center gap-2 sm:justify-end">{actions}</div>
+      ) : null}
     </div>
   );
 }
