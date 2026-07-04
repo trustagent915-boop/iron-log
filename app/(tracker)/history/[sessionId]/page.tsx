@@ -1,8 +1,10 @@
 "use client";
 
+import { Trash2 } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -40,9 +42,40 @@ function formatDelta(delta: number | null, suffix = "") {
 
 export default function HistoryDetailPage() {
   const params = useParams<{ sessionId: string }>();
-  const { findSessionDetails, isReady } = useArmTracker();
+  const router = useRouter();
+  const { findSessionDetails, isReady, syncStatus, deleteWorkoutLog } = useArmTracker();
   const sessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
   const details = sessionId ? findSessionDetails(sessionId) : null;
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  async function handleDeleteWorkoutLog() {
+    if (!details?.workoutLog) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Vuoi davvero cancellare questo allenamento? L'azione viene propagata anche agli altri dispositivi tramite il cloud."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await deleteWorkoutLog(details.workoutLog.id);
+      router.push("/history" as Route);
+    } catch (error) {
+      setDeleteError(
+        error instanceof Error ? error.message : "Cancellazione non riuscita."
+      );
+    } finally {
+      setIsDeleting(false);
+    }
+  }
 
   if (!isReady) {
     return <LoadingPanel message="Caricamento dettaglio sessione..." />;
@@ -99,13 +132,36 @@ export default function HistoryDetailPage() {
                   {details.exerciseLogs.length} esercizi registrati
                 </p>
               </div>
-              <StatusBadge status={details.workoutLog.completionStatus} />
+              <div className="flex items-center gap-2">
+                <StatusBadge status={details.workoutLog.completionStatus} />
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="text-destructive hover:bg-destructive/15 hover:text-destructive"
+                  onClick={handleDeleteWorkoutLog}
+                  disabled={isDeleting || !syncStatus.canWrite}
+                  title={
+                    syncStatus.canWrite
+                      ? "Cancella questo allenamento. La rimozione viene propagata via cloud."
+                      : "Cloud bloccato: la cancellazione non e disponibile finche la sync non torna sana."
+                  }
+                >
+                  <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                  {isDeleting ? "Cancello..." : "Cancella allenamento"}
+                </Button>
+              </div>
             </CardHeader>
             {details.workoutLog.overallNotes ? (
               <CardContent>
                 <p className="text-sm text-muted-foreground">
                   {details.workoutLog.overallNotes}
                 </p>
+              </CardContent>
+            ) : null}
+            {deleteError ? (
+              <CardContent>
+                <p className="text-sm text-destructive">{deleteError}</p>
               </CardContent>
             ) : null}
           </Card>
