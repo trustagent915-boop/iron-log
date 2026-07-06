@@ -9,7 +9,6 @@ import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
 import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { getHistoryEntries, getLastWorkoutDate, formatDateLabel } from "@/lib/arm-tracker/selectors";
@@ -39,9 +38,6 @@ interface HealthResponse {
 
 export default function SyncPage() {
   const { data, exportArchive, isReady, syncStatus } = useArmTracker();
-  const [tokenInput, setTokenInput] = useState("");
-  const [tokenMessage, setTokenMessage] = useState<string | null>(null);
-  const [isSavingToken, setIsSavingToken] = useState(false);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
   const [healthLoading, setHealthLoading] = useState(false);
@@ -113,32 +109,6 @@ export default function SyncPage() {
     downloadJsonFile(archive.fileName, archive.payload);
   }
 
-  async function saveSyncToken() {
-    setIsSavingToken(true);
-    setTokenMessage(null);
-
-    try {
-      const response = await fetch("/api/arm-tracker/session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ token: tokenInput })
-      });
-
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-        throw new Error(payload?.error ?? "Token non valido.");
-      }
-
-      setTokenMessage("Token salvato. Ricarico la pagina per ricontrollare il cloud.");
-      window.location.reload();
-    } catch (error) {
-      setTokenMessage(error instanceof Error ? error.message : "Non sono riuscito a salvare il token.");
-    } finally {
-      setIsSavingToken(false);
-    }
-  }
 
   return (
     <div className="page-enter space-y-8">
@@ -190,40 +160,21 @@ export default function SyncPage() {
       {!syncStatus.canWrite ? (
         <Card>
           <CardHeader>
-            <CardTitle>Cloud non pronto</CardTitle>
+            <CardTitle>Cloud non raggiungibile</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 text-sm leading-7 text-muted-foreground">
-            <p>{syncStatus.message}</p>
-            <div className="grid gap-3 rounded-[18px] border border-white/[0.08] bg-white/[0.03] p-4 sm:grid-cols-[1fr_auto]">
-              <div className="space-y-2">
-                <label htmlFor="sync-token" className="text-sm font-medium text-foreground">
-                  Token sync
-                </label>
-                <Input
-                  id="sync-token"
-                  type="password"
-                  value={tokenInput}
-                  onChange={(event) => setTokenInput(event.target.value)}
-                  placeholder="Inserisci il token configurato su Vercel"
-                  autoComplete="off"
-                />
-              </div>
-              <div className="flex items-end">
-                <Button type="button" onClick={saveSyncToken} disabled={isSavingToken || !tokenInput.trim()}>
-                  {isSavingToken ? "Verifica..." : "Collega"}
-                </Button>
-              </div>
-              {tokenMessage ? (
-                <p className="sm:col-span-2 text-sm text-muted-foreground">{tokenMessage}</p>
-              ) : null}
-            </div>
             <p>
-              Per recuperare i dati dell&apos;iPad, apri la PWA sull&apos;iPad, vai in Importa, esporta il
-              backup JSON e poi importalo qui quando il database cloud sara configurato.
+              {syncStatus.message ??
+                "Il database cloud non risponde. Riprova tra qualche istante — se il problema persiste, controlla la connessione o riapri l&apos;app."}
             </p>
             <div className="flex flex-wrap gap-3">
-              <Button asChild>
-                <Link href={"/import" as Route}>Apri Importa</Link>
+              <Button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== "undefined") window.location.reload();
+                }}
+              >
+                Riprova
               </Button>
               <Button asChild variant="outline">
                 <Link href={"/program" as Route}>Torna al programma</Link>
@@ -235,19 +186,13 @@ export default function SyncPage() {
         <>
           <Card>
             <CardHeader>
-              <CardTitle>Cloud pronto</CardTitle>
+              <CardTitle>Tutto sincronizzato</CardTitle>
             </CardHeader>
             <CardContent className="text-sm leading-7 text-muted-foreground">
-              I salvataggi sono abilitati. Lo snapshot JSON in
-              <code className="mx-1 rounded bg-white/[0.05] px-1 py-0.5 font-mono text-xs">
-                arm_tracker_snapshots
-              </code>
-              e l&apos;unica fonte di verita tra i dispositivi: ogni overwrite viene
-              versionato in
-              <code className="mx-1 rounded bg-white/[0.05] px-1 py-0.5 font-mono text-xs">
-                arm_tracker_snapshot_versions
-              </code>
-              prima di essere applicato.
+              I tuoi dati sono online e uguali su ogni dispositivo. Apri l&apos;app da PC,
+              iPad o telefono — vedi sempre gli stessi allenamenti. Ogni volta che salvi un
+              workout, il cloud viene aggiornato subito e una versione precedente resta
+              recuperabile.
             </CardContent>
           </Card>
 
