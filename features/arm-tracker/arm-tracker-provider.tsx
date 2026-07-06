@@ -116,8 +116,12 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
     window.addEventListener("storage", handleStorageSync);
 
     const abortController = new AbortController();
+    let attemptCount = 0;
+    const maxAttempts = 4;
+    let lastErrorMessage: string | null = null;
 
     async function reconcileRemoteSnapshot() {
+      attemptCount += 1;
       try {
         const remote = await fetchRemoteSnapshot(abortController.signal);
 
@@ -178,14 +182,31 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
         } else {
           setSyncStatus(syncReadyStatus);
         }
-      } catch {
+      } catch (error) {
+        lastErrorMessage = error instanceof Error ? error.message : String(error);
+
+        // Automatic retry with exponential backoff for transient network
+        // errors — mostly seen on Safari iOS on shaky Wi-Fi or right after
+        // waking from lock. Give up only after the last attempt.
+        if (attemptCount < maxAttempts && !abortController.signal.aborted) {
+          const delayMs = 800 * Math.pow(2, attemptCount - 1);
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+          if (abortController.signal.aborted) {
+            return;
+          }
+          await reconcileRemoteSnapshot();
+          return;
+        }
+
         syncEnabledRef.current = false;
         setSyncStatus(createBlockedSyncStatus(
-          "Cloud non raggiungibile o non autorizzato: i salvataggi sono bloccati per evitare dati salvati solo in locale."
+          `Cloud non raggiungibile: ${lastErrorMessage ?? "errore sconosciuto"}. Tira giu la pagina per ricaricare.`
         ));
       } finally {
-        syncInitializedRef.current = true;
-        syncFromStorage();
+        if (attemptCount === 1 || syncInitializedRef.current) {
+          syncInitializedRef.current = true;
+          syncFromStorage();
+        }
       }
     }
 

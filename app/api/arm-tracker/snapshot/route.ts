@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { readSupabaseSnapshot, writeSupabaseSnapshot } from "@/lib/arm-tracker/supabase-sync.server";
 import { isAuthorizedSnapshotRequest } from "@/lib/arm-tracker/snapshot-auth.server";
+import { noStoreHeaders } from "@/lib/arm-tracker/no-cache-headers";
 import type { ArmTrackerData } from "@/lib/arm-tracker/types";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
 
   try {
     const snapshot = await readSupabaseSnapshot();
-    return NextResponse.json(snapshot);
+    return NextResponse.json(snapshot, { headers: noStoreHeaders });
   } catch (error) {
     return NextResponse.json(
       {
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
         updatedAt: null,
         error: error instanceof Error ? error.message : "Unable to read Supabase snapshot."
       },
-      { status: 500 }
+      { status: 500, headers: noStoreHeaders }
     );
   }
 }
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
       seedVersion: typeof body.seedVersion === "string" ? body.seedVersion : null
     });
 
-    return NextResponse.json(snapshot);
+    return NextResponse.json(snapshot, { headers: noStoreHeaders });
   } catch (error) {
     return NextResponse.json(
       {
@@ -98,7 +99,7 @@ export async function POST(request: Request) {
         updatedAt: null,
         error: error instanceof Error ? error.message : "Unable to write Supabase snapshot."
       },
-      { status: 500 }
+      { status: 500, headers: noStoreHeaders }
     );
   }
 }

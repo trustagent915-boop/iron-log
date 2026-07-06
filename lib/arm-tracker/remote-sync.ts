@@ -14,9 +14,15 @@ export interface RemoteArchiveImportResponse extends ArmTrackerArchiveImportResu
 }
 
 export async function fetchRemoteSnapshot(signal?: AbortSignal): Promise<RemoteSnapshotResponse> {
-  const response = await fetch("/api/arm-tracker/snapshot", {
+  // Cache-bust query param defeats stale Safari cache that occasionally
+  // holds onto pre-fix 401 responses even after the server switches to 200.
+  const response = await fetch(`/api/arm-tracker/snapshot?t=${Date.now()}`, {
     method: "GET",
     cache: "no-store",
+    headers: {
+      "Cache-Control": "no-store, no-cache",
+      Pragma: "no-cache"
+    },
     signal
   });
 
