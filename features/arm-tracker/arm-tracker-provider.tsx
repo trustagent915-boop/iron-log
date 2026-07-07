@@ -17,7 +17,6 @@ import {
   removeWatchlistExerciseMutation,
   saveWorkoutLogEntry
 } from "@/lib/arm-tracker/mutations";
-import { applyCompetitionPrepProgram } from "@/lib/arm-tracker/competition-prep-program";
 import { fetchRemoteSnapshot, importRemoteArchive, pushRemoteSnapshot } from "@/lib/arm-tracker/remote-sync";
 import { getActivePlan, getSessionDetails } from "@/lib/arm-tracker/selectors";
 import {
@@ -95,17 +94,18 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
   const manualCommitInFlightRef = useRef(false);
   const lastSyncedPayloadRef = useRef<string | null>(null);
 
-  function applyLocalMigrations(snapshot: ArmTrackerData) {
-    return applyCompetitionPrepProgram(snapshot);
-  }
+  // Cloud is the single source of truth. No client-side seeds or hardcoded
+  // migrations that would fabricate data before the remote fetch resolves —
+  // that was the cause of "old data appearing on Safari" for users whose
+  // localStorage is empty on first visit.
 
   useEffect(() => {
     function syncFromStorage() {
-      setData(applyLocalMigrations(db.getSnapshot()));
+      setData(db.getSnapshot());
       setIsReady(true);
     }
 
-    const localSnapshot = applyLocalMigrations(db.getSnapshot());
+    const localSnapshot = db.getSnapshot();
     syncFromStorage();
 
     function handleStorageSync() {
