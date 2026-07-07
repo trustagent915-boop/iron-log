@@ -100,16 +100,18 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
   // localStorage is empty on first visit.
 
   useEffect(() => {
-    function syncFromStorage() {
+    // Don't flip isReady until the cloud reconcile completes (success or
+    // final failure). Otherwise the pages render an empty state during
+    // the fetch window and the user thinks the app has lost their data.
+    function refreshDataFromStorage() {
       setData(db.getSnapshot());
-      setIsReady(true);
     }
 
     const localSnapshot = db.getSnapshot();
-    syncFromStorage();
+    refreshDataFromStorage();
 
     function handleStorageSync() {
-      syncFromStorage();
+      refreshDataFromStorage();
     }
 
     window.addEventListener(ARM_TRACKER_STORAGE_EVENT, handleStorageSync);
@@ -119,6 +121,15 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
     let attemptCount = 0;
     const maxAttempts = 4;
     let lastErrorMessage: string | null = null;
+    let hasSettled = false;
+
+    function markSettled() {
+      if (hasSettled || abortController.signal.aborted) return;
+      hasSettled = true;
+      syncInitializedRef.current = true;
+      refreshDataFromStorage();
+      setIsReady(true);
+    }
 
     async function reconcileRemoteSnapshot() {
       attemptCount += 1;
@@ -130,7 +141,7 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
           setSyncStatus(createBlockedSyncStatus(
             "Cloud non configurato: puoi leggere ed esportare i dati locali, ma non salvare nuovi allenamenti finche non colleghiamo il database unico."
           ));
-          syncInitializedRef.current = true;
+          markSettled();
           return;
         }
 
@@ -163,6 +174,7 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
           if (remote.seedVersion?.trim()) {
             db.setSeedVersion(remote.seedVersion);
           }
+          markSettled();
         } else if (localHasData) {
           const pushed = await pushRemoteSnapshot({
             snapshot: localSnapshot,
@@ -179,8 +191,10 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
               "Cloud non configurato: i salvataggi sono bloccati per evitare dati intrappolati su questo dispositivo."
             ));
           }
+          markSettled();
         } else {
           setSyncStatus(syncReadyStatus);
+          markSettled();
         }
       } catch (error) {
         lastErrorMessage = error instanceof Error ? error.message : String(error);
@@ -202,11 +216,7 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
         setSyncStatus(createBlockedSyncStatus(
           `Cloud non raggiungibile: ${lastErrorMessage ?? "errore sconosciuto"}. Tira giu la pagina per ricaricare.`
         ));
-      } finally {
-        if (attemptCount === 1 || syncInitializedRef.current) {
-          syncInitializedRef.current = true;
-          syncFromStorage();
-        }
+        markSettled();
       }
     }
 
