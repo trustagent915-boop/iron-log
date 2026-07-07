@@ -4,7 +4,6 @@ import {
   BarChart3,
   CalendarDays,
   Cloud,
-  CloudOff,
   Dumbbell,
   History,
   LayoutDashboard,
@@ -76,44 +75,10 @@ function getPageTitle(pathname: string, fallback: string) {
   return fallback;
 }
 
-function SyncBadge({
-  state,
-  canWrite,
-  message
-}: {
-  state: "checking" | "ready" | "blocked";
-  canWrite: boolean;
-  message: string | null;
-}) {
-  const isChecking = state === "checking";
-  const label = canWrite ? "Cloud sync attivo" : isChecking ? "Sync in corso..." : "Cloud bloccato";
-  const tone = canWrite
-    ? "border-success/30 bg-success/10 text-success"
-    : isChecking
-      ? "border-muted-foreground/30 bg-white/[0.03] text-muted-foreground"
-      : "border-warning/30 bg-warning/10 text-warning";
-
-  return (
-    <div
-      className={cn(
-        "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium",
-        tone
-      )}
-      title={message ?? undefined}
-    >
-      {canWrite || isChecking ? (
-        <Cloud className="h-3.5 w-3.5" />
-      ) : (
-        <CloudOff className="h-3.5 w-3.5" />
-      )}
-      <span>{label}</span>
-    </div>
-  );
-}
 
 export function ArmTrackerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { data, activePlan, syncStatus } = useArmTracker();
+  const { data, activePlan } = useArmTracker();
   const planSessions = activePlan ? getPlanSessions(data, activePlan.id) : [];
   const completedSessions = planSessions.filter((session) => session.status === "completed").length;
   const historyCount = getHistoryEntries(data).length;
@@ -192,11 +157,6 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
               <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground/70">
                 Piano attivo
               </span>
-              {syncStatus.canWrite ? (
-                <span className="h-1.5 w-1.5 rounded-full bg-success" title="Cloud attivo" />
-              ) : (
-                <span className="h-1.5 w-1.5 rounded-full bg-warning" title="Cloud bloccato" />
-              )}
             </div>
             <p className="line-clamp-2 text-sm font-medium text-foreground">
               {activePlan?.name ?? "Nessun piano"}
@@ -213,15 +173,6 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
                 <span className="font-mono text-foreground">{historyCount}</span>
               </div>
             </div>
-            {!syncStatus.canWrite ? (
-              <Link
-                href={"/sync" as Route}
-                className="mt-3 flex items-center justify-center gap-1.5 rounded-md border border-warning/30 bg-warning/10 px-2 py-1.5 text-[11px] font-medium text-warning hover:bg-warning/15"
-              >
-                <CloudOff className="h-3 w-3" />
-                Collega cloud
-              </Link>
-            ) : null}
           </div>
         </div>
       </aside>
@@ -257,11 +208,6 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
           </div>
 
           <div className="flex items-center gap-2">
-            <SyncBadge
-              state={syncStatus.state}
-              canWrite={syncStatus.canWrite}
-              message={syncStatus.message}
-            />
             <Button asChild size="sm" variant="outline" className="hidden sm:inline-flex">
               <Link href={"/custom-workout/new" as Route}>
                 <Plus className="mr-1.5 h-3.5 w-3.5" />

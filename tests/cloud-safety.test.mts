@@ -117,16 +117,24 @@ test("backup imports are handled by an authenticated server route instead of bro
   assert.doesNotMatch(providerSource, /importArmTrackerArchive/);
 });
 
-test("critical mutations wait for cloud confirmation and roll back local state on failure", () => {
+test("critical mutations run through the fire-and-forget commit path", () => {
+  // The app no longer blocks the UI on cloud confirmation. Mutations are
+  // applied to local state immediately (optimistic), then pushed to the
+  // cloud in the background via pushSnapshotBestEffort. A push failure
+  // never surfaces as a "Cloud bloccato" barrier to the user.
   const providerSource = readFileSync("features/arm-tracker/arm-tracker-provider.tsx", "utf8");
   const logPageSource = readFileSync("app/(tracker)/log/[sessionId]/page.tsx", "utf8");
   const customPageSource = readFileSync("app/(tracker)/custom-workout/new/page.tsx", "utf8");
   const importPageSource = readFileSync("app/(tracker)/import/page.tsx", "utf8");
 
-  assert.match(providerSource, /async function commitMutationToCloud/);
-  assert.match(providerSource, /await pushRemoteSnapshot/);
-  assert.match(providerSource, /db\.setSnapshot\(previousSnapshot\)/);
-  assert.match(providerSource, /manualCommitInFlightRef/);
+  assert.match(providerSource, /async function commitMutation/);
+  assert.match(providerSource, /pushSnapshotBestEffort/);
+  assert.match(providerSource, /pushRemoteSnapshot/);
+  assert.doesNotMatch(
+    providerSource,
+    /Cloud bloccato|Cloud non pronto|Cloud non raggiungibile/,
+    "provider must not surface user-facing 'Cloud bloccato' barrier language"
+  );
   assert.match(logPageSource, /await saveWorkoutLog/);
   assert.match(customPageSource, /await createCustomSession/);
   assert.match(importPageSource, /await importPlan/);
