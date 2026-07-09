@@ -37,12 +37,41 @@ const collectionKeys = [
   "importRuns"
 ] as const;
 
-const maxLocalBackupCount = 10;
+// Safari's localStorage quota per origin is ~5MB — much lower than
+// Chrome's. A large snapshot (a few MB) plus multiple local backups used
+// to blow past it and QuotaExceededError crashed every save, so the app
+// showed nothing on iPad while working on desktop. Backups are now capped
+// low and skipped entirely for big snapshots — the cloud already keeps
+// versioned history in arm_tracker_snapshot_versions.
+const maxLocalBackupCount = 2;
+const maxBackupSnapshotBytes = 512 * 1024; // 0.5MB per backup ceiling
 
 export const ARM_TRACKER_STORAGE_EVENT = "iron-log-storage-updated";
 
 function canUseStorage() {
   return typeof window !== "undefined" && typeof window.localStorage !== "undefined";
+}
+
+// Write to localStorage without ever throwing. On a quota error we free
+// space by dropping the (optional) local backups first, then retry once.
+// If it still fails we silently give up — the cloud snapshot is the source
+// of truth, so a full local cache never breaks the app.
+function safeSetItem(key: string, value: string): boolean {
+  if (!canUseStorage()) {
+    return false;
+  }
+  try {
+    window.localStorage.setItem(key, value);
+    return true;
+  } catch {
+    try {
+      window.localStorage.removeItem(storageKeys.localBackups);
+      window.localStorage.setItem(key, value);
+      return true;
+    } catch {
+      return false;
+    }
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -401,7 +430,15 @@ function writeLocalBackup(snapshot: ArmTrackerData | null, reason: string) {
     archive: buildArchive(snapshot, createdAt)
   };
 
-  window.localStorage.setItem(
+  const serialized = JSON.stringify(backup);
+  // Skip backups that would eat the tiny Safari quota. The cloud keeps
+  // versioned snapshots, so a local safety backup for a multi-MB dataset
+  // is not worth crashing localStorage over.
+  if (serialized.length > maxBackupSnapshotBytes) {
+    return;
+  }
+
+  safeSetItem(
     storageKeys.localBackups,
     JSON.stringify([backup, ...readLocalBackups()].slice(0, maxLocalBackupCount))
   );
@@ -412,7 +449,11 @@ function writeRootSnapshot(snapshot: ArmTrackerData) {
     return;
   }
 
-  window.localStorage.setItem(storageKeys.root, JSON.stringify(buildArchive(snapshot)));
+  // The root snapshot is the priority cache. If it doesn't fit, safeSetItem
+  // will drop the backups and retry; if it still doesn't fit (huge dataset
+  // on Safari), we simply run from the in-memory copy — the cloud already
+  // has the authoritative data.
+  safeSetItem(storageKeys.root, JSON.stringify(buildArchive(snapshot)));
 }
 
 function clearLegacyKeys() {
@@ -664,11 +705,24 @@ export function importArmTrackerArchive(payload: string): ArmTrackerArchiveImpor
   );
 }
 
+// In-memory copy of the current snapshot. This is the session source of
+// truth for rendering. localStorage is only a persistence cache — when it
+// can't hold the data (Safari quota) the app still works from memory, and
+// the cloud still has the authoritative copy. Without this, a failed
+// localStorage write on iPad made getSnapshot() read back empty and the
+// whole UI rendered with no data.
+let memorySnapshot: ArmTrackerData | null = null;
+
 export const db = {
   getSnapshot(): ArmTrackerData {
+    if (memorySnapshot) {
+      return memorySnapshot;
+    }
+
     const rootSnapshot = readRootSnapshot();
 
     if (rootSnapshot) {
+      memorySnapshot = rootSnapshot;
       return rootSnapshot;
     }
 
@@ -683,11 +737,18 @@ export const db = {
   },
 
   setSnapshot(snapshot: ArmTrackerData) {
-    const currentSnapshot = readRootSnapshot();
+    const currentSnapshot = memorySnapshot ?? readRootSnapshot();
     const normalizedSnapshot = normalizeSnapshot(snapshot);
 
-    writeLocalBackup(currentSnapshot, "before-setSnapshot");
+    // Keep memory authoritative first so rendering always has the data
+    // even if the localStorage writes below silently fail (Safari quota).
+    memorySnapshot = normalizedSnapshot;
+
+    // Root snapshot first (priority cache), then the best-effort backup.
+    // None of these can throw anymore, so a full localStorage on Safari
+    // never breaks a save — the change stays in memory and syncs to cloud.
     writeRootSnapshot(normalizedSnapshot);
+    writeLocalBackup(currentSnapshot, "before-setSnapshot");
     clearLegacyKeys();
     notifyStorageUpdate();
   },
@@ -706,11 +767,7 @@ export const db = {
   },
 
   setSeedVersion(version: string) {
-    if (!canUseStorage()) {
-      return;
-    }
-
-    window.localStorage.setItem(storageKeys.seedVersion, version);
+    safeSetItem(storageKeys.seedVersion, version);
   },
 
   getPlans() {
