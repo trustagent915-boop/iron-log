@@ -6,7 +6,7 @@ import {
   getLevel100Score,
   LEVEL_100_TARGET_EXERCISES
 } from "../lib/arm-tracker/level-100.ts";
-import { createEmptyArmTrackerData, mergeArmTrackerSnapshots } from "../lib/arm-tracker/storage.ts";
+import { createEmptyArmTrackerData, db, mergeArmTrackerSnapshots } from "../lib/arm-tracker/storage.ts";
 import type {
   ArmTrackerData,
   WorkoutExerciseLog,
@@ -229,4 +229,31 @@ test("merge accepts legacy v2 snapshots (missing deletedIds/level100Watchlist) w
   assert.equal(merged.workoutLogs.length, 1);
   assert.deepEqual(merged.deletedIds.workoutLogs, []);
   assert.deepEqual(merged.level100Watchlist, []);
+});
+
+test("db keeps the snapshot in memory so a failed localStorage write still renders data", () => {
+  // In the node test environment there is no window.localStorage, so every
+  // persistence path is a no-op — exactly the worst case of a Safari quota
+  // failure where nothing can be written. The in-memory copy must still
+  // serve getSnapshot so the UI renders the data instead of showing empty.
+  const snapshot = makeSnapshot({
+    plans: [
+      {
+        id: "mem-plan",
+        name: "Programma in memoria",
+        sourceFileName: "mem.xlsx",
+        importedAt: "2026-07-01T00:00:00.000Z",
+        status: "active"
+      }
+    ],
+    workoutLogs: [makeWorkoutLog("mem-log")]
+  });
+
+  db.setSnapshot(snapshot);
+  const readBack = db.getSnapshot();
+
+  assert.equal(readBack.plans.length, 1);
+  assert.equal(readBack.plans[0].name, "Programma in memoria");
+  assert.equal(readBack.workoutLogs.length, 1);
+  assert.equal(readBack.workoutLogs[0].id, "mem-log");
 });
