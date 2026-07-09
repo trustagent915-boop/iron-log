@@ -49,6 +49,45 @@ function toFieldValue(value: number | null) {
   return value === null ? "" : String(value);
 }
 
+// Tappable "planned" chip. When the exercise has a planned value, tapping
+// the chip copies that number straight into the matching actual field —
+// fast logging without typing. Falls back to a plain chip when there's no
+// planned value or the exercise is skipped.
+function PlannedChip({
+  label,
+  value,
+  display,
+  disabled,
+  onFill
+}: {
+  label: string;
+  value: number | null;
+  display: string;
+  disabled: boolean;
+  onFill: () => void;
+}) {
+  const tappable = value !== null && !disabled;
+
+  if (!tappable) {
+    return (
+      <span className="rounded-full bg-secondary px-3 py-1 text-secondary-foreground">
+        {label}: {display}
+      </span>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onFill}
+      title={`Tocca per inserire ${display}`}
+      className="rounded-full border border-primary/40 bg-primary/10 px-3 py-1 font-medium text-primary transition hover:bg-primary/20 active:scale-95"
+    >
+      {label}: {display}
+    </button>
+  );
+}
+
 export default function LogWorkoutPage() {
   const params = useParams<{ sessionId: string }>();
   const router = useRouter();
@@ -257,19 +296,65 @@ export default function LogWorkoutPage() {
                 <div className="space-y-2">
                   <CardTitle className="text-xl">{exercise.exerciseName}</CardTitle>
                   <div className="flex flex-wrap gap-2 text-xs">
-                    <span className="rounded-full bg-secondary px-3 py-1 text-secondary-foreground">
-                      {isCustomWorkout ? "Set target" : "Set previsti"}:{" "}
-                      {formatCompactNumber(exercise.plannedSets)}
-                    </span>
-                    <span className="rounded-full bg-secondary px-3 py-1 text-secondary-foreground">
-                      {isCustomWorkout ? "Reps target" : "Reps previste"}:{" "}
-                      {formatCompactNumber(exercise.plannedReps)}
-                    </span>
-                    <span className="rounded-full bg-secondary px-3 py-1 text-secondary-foreground">
-                      {isCustomWorkout ? "Peso target" : "Peso previsto"}:{" "}
-                      {formatCompactWeight(exercise.plannedWeight)}
-                    </span>
+                    <PlannedChip
+                      label={isCustomWorkout ? "Set target" : "Set previsti"}
+                      value={exercise.plannedSets}
+                      display={formatCompactNumber(exercise.plannedSets)}
+                      disabled={draft.skipped}
+                      onFill={() =>
+                        updateDraft(exercise.id, { actualSets: String(exercise.plannedSets) })
+                      }
+                    />
+                    <PlannedChip
+                      label={isCustomWorkout ? "Reps target" : "Reps previste"}
+                      value={exercise.plannedReps}
+                      display={formatCompactNumber(exercise.plannedReps)}
+                      disabled={draft.skipped}
+                      onFill={() =>
+                        updateDraft(exercise.id, { actualReps: String(exercise.plannedReps) })
+                      }
+                    />
+                    <PlannedChip
+                      label={isCustomWorkout ? "Peso target" : "Peso previsto"}
+                      value={exercise.plannedWeight}
+                      display={formatCompactWeight(exercise.plannedWeight)}
+                      disabled={draft.skipped}
+                      onFill={() =>
+                        updateDraft(exercise.id, { actualWeight: String(exercise.plannedWeight) })
+                      }
+                    />
                   </div>
+                  {(exercise.plannedSets !== null ||
+                    exercise.plannedReps !== null ||
+                    exercise.plannedWeight !== null) &&
+                  !draft.skipped ? (
+                    <button
+                      type="button"
+                      className="text-[11px] font-medium text-primary underline-offset-2 hover:underline"
+                      onClick={() =>
+                        updateDraft(exercise.id, {
+                          actualSets:
+                            exercise.plannedSets !== null
+                              ? String(exercise.plannedSets)
+                              : draft.actualSets,
+                          actualReps:
+                            exercise.plannedReps !== null
+                              ? String(exercise.plannedReps)
+                              : draft.actualReps,
+                          actualWeight:
+                            exercise.plannedWeight !== null
+                              ? String(exercise.plannedWeight)
+                              : draft.actualWeight
+                        })
+                      }
+                    >
+                      Compila tutto come previsto
+                    </button>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      Tocca un valore previsto per copiarlo nel campo effettivo.
+                    </p>
+                  )}
                 </div>
                 <Button
                   type="button"
