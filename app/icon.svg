@@ -1,9 +1,111 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
-  <rect width="128" height="128" rx="28" fill="#11141a"/>
-  <rect x="24" y="56" width="22" height="16" rx="5" fill="#f59d18"/>
-  <rect x="82" y="56" width="22" height="16" rx="5" fill="#f59d18"/>
-  <rect x="44" y="50" width="40" height="28" rx="10" fill="#f59d18"/>
-  <rect x="54" y="30" width="20" height="68" rx="10" fill="#2eb3a3" opacity="0.3"/>
-  <path d="M47 43c6-5 28-5 34 0" stroke="#11141a" stroke-width="8" stroke-linecap="round"/>
-  <path d="M47 85c6 5 28 5 34 0" stroke="#11141a" stroke-width="8" stroke-linecap="round"/>
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Outer background -->
+    <radialGradient id="bgGrad" cx="50%" cy="40%" r="60%">
+      <stop offset="0%" stop-color="#150C2E"/>
+      <stop offset="100%" stop-color="#060811"/>
+    </radialGradient>
+    <!-- Purple energy glow -->
+    <radialGradient id="purpleGlow" cx="50%" cy="45%" r="50%">
+      <stop offset="0%" stop-color="#8B5CF6" stop-opacity="0.45"/>
+      <stop offset="60%" stop-color="#6D28D9" stop-opacity="0.15"/>
+      <stop offset="100%" stop-color="#4C1D95" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Cold blue glow top -->
+    <radialGradient id="blueGlow" cx="50%" cy="20%" r="40%">
+      <stop offset="0%" stop-color="#60A5FA" stop-opacity="0.30"/>
+      <stop offset="100%" stop-color="#2563EB" stop-opacity="0"/>
+    </radialGradient>
+    <!-- Silver metallic gradient for text/body -->
+    <linearGradient id="silverGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#F1F5F9"/>
+      <stop offset="40%" stop-color="#CBD5E1"/>
+      <stop offset="100%" stop-color="#94A3B8"/>
+    </linearGradient>
+    <!-- Electric purple accent -->
+    <linearGradient id="purpleAccent" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#C4B5FD"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+    <!-- Shadow filter -->
+    <filter id="glowFilter" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="purpleGlowFilter" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feFlood flood-color="#8B5CF6" flood-opacity="0.6" result="color"/>
+      <feComposite in="color" in2="blur" operator="in" result="shadow"/>
+      <feMerge>
+        <feMergeNode in="shadow"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="512" height="512" rx="100" fill="url(#bgGrad)"/>
+
+  <!-- Ambient energy glows -->
+  <ellipse cx="256" cy="230" rx="240" ry="200" fill="url(#purpleGlow)"/>
+  <ellipse cx="256" cy="100" rx="180" ry="100" fill="url(#blueGlow)"/>
+
+  <!-- Dark energy mass / shadow orb (the iconic silhouette) -->
+  <ellipse cx="256" cy="270" rx="160" ry="140" fill="#0A0618" opacity="0.9"/>
+  <ellipse cx="256" cy="250" rx="130" ry="110" fill="#08041A" opacity="0.95"/>
+
+  <!-- Shadow figure shoulder/body shape -->
+  <path d="M140 310 C140 240 180 195 256 185 C332 195 372 240 372 310 C372 355 340 380 256 390 C172 380 140 355 140 310Z" fill="#0C0620" opacity="0.9"/>
+
+  <!-- Electric crown spikes (top of the shadow figure) -->
+  <g filter="url(#purpleGlowFilter)" opacity="0.85">
+    <path d="M256 185 L248 145 L256 162 L264 145 Z" fill="#8B5CF6"/>
+    <path d="M228 192 L210 155 L222 175 L218 155 L232 180 Z" fill="#7C3AED"/>
+    <path d="M284 192 L302 155 L290 175 L294 155 L280 180 Z" fill="#7C3AED"/>
+    <path d="M210 205 L185 172 L200 195 Z" fill="#6D28D9"/>
+    <path d="M302 205 L327 172 L312 195 Z" fill="#6D28D9"/>
+  </g>
+
+  <!-- Glowing purple eyes -->
+  <g filter="url(#purpleGlowFilter)">
+    <ellipse cx="225" cy="268" rx="16" ry="10" fill="#7C3AED" opacity="0.4"/>
+    <ellipse cx="287" cy="268" rx="16" ry="10" fill="#7C3AED" opacity="0.4"/>
+    <ellipse cx="225" cy="268" rx="10" ry="7" fill="#A78BFA"/>
+    <ellipse cx="287" cy="268" rx="10" ry="7" fill="#A78BFA"/>
+    <ellipse cx="225" cy="268" rx="5" ry="4" fill="#E9D5FF"/>
+    <ellipse cx="287" cy="268" rx="5" ry="4" fill="#E9D5FF"/>
+  </g>
+
+  <!-- Lightning bolts emanating from figure -->
+  <g opacity="0.75" filter="url(#purpleGlowFilter)">
+    <!-- Left lightning -->
+    <path d="M185 250 L162 272 L178 272 L155 300" stroke="#A78BFA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M175 262 L148 278 L165 278 L140 305" stroke="#8B5CF6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <!-- Right lightning -->
+    <path d="M327 250 L350 272 L334 272 L357 300" stroke="#A78BFA" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M337 262 L364 278 L347 278 L372 305" stroke="#8B5CF6" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  </g>
+
+  <!-- Bottom purple energy pool -->
+  <ellipse cx="256" cy="385" rx="110" ry="22" fill="#7C3AED" opacity="0.18"/>
+  <ellipse cx="256" cy="385" rx="70" ry="12" fill="#8B5CF6" opacity="0.25"/>
+
+  <!-- "G" letterform – prominent title mark -->
+  <text x="256" y="440" text-anchor="middle" font-family="'Helvetica Neue', 'Arial Black', sans-serif"
+    font-weight="900" font-size="78" letter-spacing="-2"
+    fill="url(#silverGrad)" opacity="0.9">GSL</text>
+
+  <!-- Top border electric glow strip -->
+  <rect x="60" y="100" width="392" height="1.5" rx="0.75" fill="url(#topEdge)" opacity="0.5"/>
+
+  <defs>
+    <linearGradient id="topEdge" x1="0" y1="0" x2="392" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#8B5CF6" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#C4B5FD" stop-opacity="1"/>
+      <stop offset="1" stop-color="#8B5CF6" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
 </svg>

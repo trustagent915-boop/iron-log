@@ -32,9 +32,14 @@ export const metadata: Metadata = {
     "Iron Log e il training cockpit per tenere sotto controllo programma, sessioni custom e progressi direttamente dal telefono.",
   applicationName: "Iron Log",
   manifest: "/manifest.webmanifest",
+  // icon.svg (favicon, monarca ombra) è gestito dalla convenzione app/icon.svg.
+  // L'icona Home iOS usa il logo "GYM SOLO LEVELING" servito da public/.
+  icons: {
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }]
+  },
   appleWebApp: {
     capable: true,
-    title: "Iron Log",
+    title: "Gym Solo Leveling",
     statusBarStyle: "black-translucent"
   }
 };
