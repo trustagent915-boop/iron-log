@@ -21,7 +21,24 @@ import {
   getPlanSessionsWithExercises,
   groupSessionsByWeek
 } from "@/lib/arm-tracker/selectors";
-import type { SessionStatus } from "@/lib/arm-tracker/types";
+import type { SessionStatus, SessionWithExercises } from "@/lib/arm-tracker/types";
+
+// Un allenamento è "fatto" se completato o saltato. I fatti vanno in fondo,
+// quelli ancora da fare restano in cima ordinati per data, così il prossimo
+// allenamento è sempre il primo che vedi.
+function isSessionDone(session: SessionWithExercises) {
+  return session.status === "completed" || session.status === "skipped";
+}
+
+function sortSessionsPendingFirst(sessions: SessionWithExercises[]) {
+  return [...sessions].sort((left, right) => {
+    const doneDiff = Number(isSessionDone(left)) - Number(isSessionDone(right));
+    if (doneDiff !== 0) {
+      return doneDiff;
+    }
+    return left.sessionDate.localeCompare(right.sessionDate);
+  });
+}
 
 const filterOptions: Array<{ value: "all" | SessionStatus; label: string }> = [
   { value: "all", label: "Tutti gli stati" },
@@ -94,11 +111,23 @@ export default function ProgramPage() {
   const customSessions = allCustomSessions.filter(
     (session) => selectedStatus === "all" || session.status === selectedStatus
   );
-  const groupedSessions = groupSessionsByWeek(plannedSessions);
+  // Sessioni completate in fondo a ogni settimana; le settimane ancora
+  // aperte salgono sopra quelle già tutte chiuse.
+  const groupedSessions = groupSessionsByWeek(plannedSessions)
+    .map((group) => ({ ...group, sessions: sortSessionsPendingFirst(group.sessions) }))
+    .sort((left, right) => {
+      const leftPending = left.sessions.some((session) => !isSessionDone(session));
+      const rightPending = right.sessions.some((session) => !isSessionDone(session));
+      if (leftPending === rightPending) {
+        return 0;
+      }
+      return leftPending ? -1 : 1;
+    });
+  const sortedCustomSessions = sortSessionsPendingFirst(customSessions);
   const completedCount = [...allPlannedSessions, ...allCustomSessions].filter(
     (session) => session.status === "completed"
   ).length;
-  const hasVisibleSessions = groupedSessions.length > 0 || customSessions.length > 0;
+  const hasVisibleSessions = groupedSessions.length > 0 || sortedCustomSessions.length > 0;
 
   return (
     <div className="page-enter space-y-8">
@@ -192,7 +221,7 @@ export default function ProgramPage() {
           </div>
 
           <div className="space-y-4">
-            {customSessions.map((session) => (
+            {sortedCustomSessions.map((session) => (
               <Card key={session.id}>
                 <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                   <div className="space-y-2">
