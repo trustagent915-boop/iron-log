@@ -1,9 +1,8 @@
 import { ImageResponse } from "next/og";
 
-// iOS Safari "Aggiungi a Home" ignora le icone SVG e, senza un
-// apple-touch-icon PNG, usa uno screenshot generico della pagina. Questo
-// genera un vero PNG 180x180 con il dumbbell del brand così l'icona
-// salvata sull'iPad torna a essere quella corretta.
+// Icona Home iOS (PNG 180x180). Brand "Gym Solo Leveling": tutto viola
+// con la scritta LEVELING. iOS ignora le icone SVG, quindi serve questo
+// PNG generato altrimenti mette uno screenshot generico della pagina.
 export const size = { width: 180, height: 180 };
 export const contentType = "image/png";
 
@@ -14,60 +13,51 @@ export default function AppleIcon() {
         style={{
           width: "100%",
           height: "100%",
-          background: "#11141a",
           display: "flex",
-          position: "relative"
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "linear-gradient(150deg, #8b5cf6 0%, #6d28d9 55%, #4c1d95 100%)",
+          color: "#ffffff"
         }}
       >
-        {/* accento verticale tenue (teal) dietro il manubrio */}
         <div
           style={{
-            position: "absolute",
-            left: 76,
-            top: 42,
-            width: 28,
-            height: 96,
-            borderRadius: 14,
-            background: "#2eb3a3",
-            opacity: 0.3
+            display: "flex",
+            fontSize: 15,
+            fontWeight: 700,
+            letterSpacing: 4,
+            color: "#e9d5ff"
           }}
-        />
-        {/* piatto sinistro */}
+        >
+          GYM SOLO
+        </div>
         <div
           style={{
-            position: "absolute",
-            left: 34,
-            top: 79,
-            width: 31,
-            height: 22,
-            borderRadius: 7,
-            background: "#f59d18"
+            display: "flex",
+            fontSize: 30,
+            fontWeight: 800,
+            letterSpacing: 1,
+            marginTop: 4
           }}
-        />
-        {/* barra centrale */}
+        >
+          LEVELING
+        </div>
         <div
           style={{
-            position: "absolute",
-            left: 62,
-            top: 70,
-            width: 56,
-            height: 40,
-            borderRadius: 14,
-            background: "#f59d18"
+            display: "flex",
+            marginTop: 10,
+            padding: "3px 12px",
+            borderRadius: 999,
+            background: "rgba(255,255,255,0.16)",
+            fontSize: 13,
+            fontWeight: 700,
+            letterSpacing: 2,
+            color: "#f5f3ff"
           }}
-        />
-        {/* piatto destro */}
-        <div
-          style={{
-            position: "absolute",
-            left: 115,
-            top: 79,
-            width: 31,
-            height: 22,
-            borderRadius: 7,
-            background: "#f59d18"
-          }}
-        />
+        >
+          LV 100
+        </div>
       </div>
     ),
     { ...size }
