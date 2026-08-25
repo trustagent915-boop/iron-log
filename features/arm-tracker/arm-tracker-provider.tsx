@@ -15,8 +15,10 @@ import {
   createCustomSession,
   deleteWorkoutLogMutation,
   importParsedPlan,
+  logArmwrestlingSessionMutation,
   removeWatchlistExerciseMutation,
-  saveWorkoutLogEntry
+  saveWorkoutLogEntry,
+  type LogArmwrestlingSessionInput
 } from "@/lib/arm-tracker/mutations";
 import { fetchRemoteSnapshot, importRemoteArchive, pushRemoteSnapshot } from "@/lib/arm-tracker/remote-sync";
 import { getActivePlan, getSessionDetails } from "@/lib/arm-tracker/selectors";
@@ -70,6 +72,9 @@ interface ArmTrackerContextValue {
   addWatchlistExercise: (exerciseName: string) => Promise<void>;
   removeWatchlistExercise: (exerciseName: string) => Promise<void>;
   deleteWorkoutLog: (workoutLogId: string) => Promise<void>;
+  logArmwrestlingSession: (
+    input: LogArmwrestlingSessionInput
+  ) => Promise<ReturnType<typeof logArmwrestlingSessionMutation>>;
 }
 
 const ArmTrackerContext = createContext<ArmTrackerContextValue | null>(null);
@@ -205,6 +210,10 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
     await commitMutation(() => deleteWorkoutLogMutation(workoutLogId));
   }
 
+  async function logArmwrestlingSession(input: LogArmwrestlingSessionInput) {
+    return commitMutation(() => logArmwrestlingSessionMutation(input));
+  }
+
   function exportArchive() {
     return exportArmTrackerArchive(data);
   }
@@ -244,7 +253,8 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
         findSessionDetails,
         addWatchlistExercise,
         removeWatchlistExercise,
-        deleteWorkoutLog
+        deleteWorkoutLog,
+        logArmwrestlingSession
       }}
     >
       {children}

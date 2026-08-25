@@ -197,6 +197,100 @@ export function createCustomSession(input: CreateCustomSessionInput): CreateCust
   return { session, exercises };
 }
 
+export interface LogArmwrestlingSessionInput {
+  sessionDate: string;
+  /** Etichetta libera, es. "Sparring in palestra". Default: "Allenamento braccio di ferro". */
+  title?: string | null;
+  /** Durata indicativa in minuti, opzionale. */
+  durationMinutes?: number | null;
+  notes?: string | null;
+}
+
+/**
+ * Registra una sessione di braccio di ferro come voce singola: niente
+ * set/reps/peso da compilare. Crea la sessione custom E il relativo log
+ * già completato, così finisce subito in storico e statistiche.
+ */
+export function logArmwrestlingSessionMutation(input: LogArmwrestlingSessionInput) {
+  const snapshot = db.getSnapshot();
+  const activePlan = getActivePlanFromSnapshot(snapshot);
+
+  if (!activePlan) {
+    throw new Error("Importa prima un programma attivo per registrare la sessione.");
+  }
+
+  const sessionId = crypto.randomUUID();
+  const exerciseId = crypto.randomUUID();
+  const workoutLogId = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  const label = sanitizeText(input.title ?? "", 80) || "Allenamento braccio di ferro";
+  const notes = sanitizeText(input.notes ?? "", 400) || null;
+  const duration =
+    typeof input.durationMinutes === "number" && Number.isFinite(input.durationMinutes) && input.durationMinutes > 0
+      ? input.durationMinutes
+      : null;
+
+  const session: PlanSession = {
+    id: sessionId,
+    planId: activePlan.id,
+    sessionDate: input.sessionDate,
+    dayLabel: label,
+    weekNumber: null,
+    notes,
+    status: "completed",
+    kind: "custom"
+  };
+
+  const exercise: PlanExercise = {
+    id: exerciseId,
+    sessionId,
+    exerciseName: "Allenamento braccio di ferro",
+    plannedSets: null,
+    plannedReps: null,
+    plannedWeight: null,
+    plannedNotes: duration ? `Durata ${duration} min` : null,
+    sortOrder: 0
+  };
+
+  const workoutLog: WorkoutLog = {
+    id: workoutLogId,
+    planSessionId: sessionId,
+    performedDate: input.sessionDate,
+    bodyweightKg: null,
+    overallNotes: notes,
+    completionStatus: "completed",
+    createdAt
+  };
+
+  const exerciseLog: WorkoutExerciseLog = {
+    id: crypto.randomUUID(),
+    workoutLogId,
+    planExerciseId: exerciseId,
+    exerciseNameSnapshot: "Allenamento braccio di ferro",
+    plannedSetsSnapshot: null,
+    plannedRepsSnapshot: null,
+    plannedWeightSnapshot: null,
+    plannedNotesSnapshot: exercise.plannedNotes,
+    actualWeight: null,
+    actualReps: null,
+    actualSets: null,
+    // La durata viene salvata in secondi così resta un dato numerico reale
+    actualSeconds: duration ? duration * 60 : null,
+    notes,
+    performedOrder: 0
+  };
+
+  db.setSnapshot({
+    ...snapshot,
+    sessions: [...snapshot.sessions, session],
+    exercises: [...snapshot.exercises, exercise],
+    workoutLogs: [...snapshot.workoutLogs, workoutLog],
+    exerciseLogs: [...snapshot.exerciseLogs, exerciseLog]
+  });
+
+  return { session, exercise, workoutLog };
+}
+
 export function addWatchlistExerciseMutation(exerciseName: string) {
   const snapshot = db.getSnapshot();
   const trimmed = sanitizeText(exerciseName, 120).trim();

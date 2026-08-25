@@ -1,6 +1,7 @@
 ﻿"use client";
 
-import { ClipboardList, Layers3, Sparkles, Target } from "lucide-react";
+import { format } from "date-fns";
+import { ClipboardList, Layers3, Sparkles, Swords, Target } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -10,6 +11,7 @@ import { MetricCard } from "@/components/metric-card";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { StatusBadge } from "@/features/arm-tracker/status-badge";
@@ -49,10 +51,37 @@ const filterOptions: Array<{ value: "all" | SessionStatus; label: string }> = [
 ];
 
 export default function ProgramPage() {
-  const { data, activePlan, isReady } = useArmTracker();
+  const { data, activePlan, isReady, logArmwrestlingSession } = useArmTracker();
   const pathname = usePathname();
   const [selectedStatus, setSelectedStatus] =
     useState<(typeof filterOptions)[number]["value"]>("all");
+  const [awDate, setAwDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [awDuration, setAwDuration] = useState("");
+  const [awNotes, setAwNotes] = useState("");
+  const [awSaving, setAwSaving] = useState(false);
+  const [awMessage, setAwMessage] = useState<string | null>(null);
+
+  async function handleLogArmwrestling() {
+    setAwSaving(true);
+    setAwMessage(null);
+    try {
+      const parsedDuration = Number(awDuration.replace(",", "."));
+      await logArmwrestlingSession({
+        sessionDate: awDate,
+        durationMinutes: Number.isFinite(parsedDuration) && parsedDuration > 0 ? parsedDuration : null,
+        notes: awNotes
+      });
+      setAwDuration("");
+      setAwNotes("");
+      setAwMessage("Allenamento di braccio di ferro registrato.");
+    } catch (error) {
+      setAwMessage(
+        error instanceof Error ? error.message : "Non sono riuscito a registrare la sessione."
+      );
+    } finally {
+      setAwSaving(false);
+    }
+  }
 
   useEffect(() => {
     const statusParam = new URLSearchParams(window.location.search).get("status");
@@ -189,6 +218,60 @@ export default function ProgramPage() {
           icon={<ClipboardList className="h-5 w-5" />}
         />
       </div>
+
+      <Card>
+        <CardHeader className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2">
+            <Swords className="h-4 w-4 text-primary" />
+            <CardTitle className="text-lg">Allenamento braccio di ferro</CardTitle>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Voce singola: nessun set o peso da compilare.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-[170px_150px_1fr_auto] sm:items-end">
+            <div className="space-y-1.5">
+              <label htmlFor="aw-date" className="text-xs font-medium text-muted-foreground">
+                Data
+              </label>
+              <Input
+                id="aw-date"
+                type="date"
+                value={awDate}
+                onChange={(event) => setAwDate(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="aw-duration" className="text-xs font-medium text-muted-foreground">
+                Durata (min)
+              </label>
+              <Input
+                id="aw-duration"
+                inputMode="numeric"
+                placeholder="es. 60"
+                value={awDuration}
+                onChange={(event) => setAwDuration(event.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label htmlFor="aw-notes" className="text-xs font-medium text-muted-foreground">
+                Note (opzionale)
+              </label>
+              <Input
+                id="aw-notes"
+                placeholder="Sparring, tecnica, con chi, sensazioni..."
+                value={awNotes}
+                onChange={(event) => setAwNotes(event.target.value)}
+              />
+            </div>
+            <Button type="button" onClick={handleLogArmwrestling} disabled={awSaving || !awDate}>
+              {awSaving ? "Salvo..." : "Registra"}
+            </Button>
+          </div>
+          {awMessage ? <p className="text-xs text-muted-foreground">{awMessage}</p> : null}
+        </CardContent>
+      </Card>
 
       {selectedStatus !== "all" ? (
         <Card>
