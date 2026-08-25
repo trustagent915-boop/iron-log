@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { format } from "date-fns";
-import { ClipboardList, Layers3, Sparkles, Swords, Target } from "lucide-react";
+import { ChevronRight, ClipboardList, Layers3, Sparkles, Swords, Target } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -60,6 +60,19 @@ export default function ProgramPage() {
   const [awNotes, setAwNotes] = useState("");
   const [awSaving, setAwSaving] = useState(false);
   const [awMessage, setAwMessage] = useState<string | null>(null);
+  // Settimane e singoli allenamenti sono richiudibili: la pagina si apre
+  // con l'elenco compatto delle settimane e apri solo quella che ti serve.
+  const [openWeeks, setOpenWeeks] = useState<Record<string, boolean>>({});
+  const [openSessions, setOpenSessions] = useState<Record<string, boolean>>({});
+  const [didAutoOpenWeek, setDidAutoOpenWeek] = useState(false);
+
+  function toggleWeek(weekKey: string) {
+    setOpenWeeks((current) => ({ ...current, [weekKey]: !(current[weekKey] ?? false) }));
+  }
+
+  function toggleSession(sessionId: string) {
+    setOpenSessions((current) => ({ ...current, [sessionId]: !(current[sessionId] ?? false) }));
+  }
 
   async function handleLogArmwrestling() {
     setAwSaving(true);
@@ -163,6 +176,18 @@ export default function ProgramPage() {
       return left.weekNumber - right.weekNumber;
     });
   const sortedCustomSessions = sortSessionsPendingFirst(customSessions);
+  // Apri automaticamente la prima settimana ancora da completare, una sola
+  // volta: così atterri sulla settimana corrente senza dover cliccare.
+  const firstPendingWeekTitle =
+    groupedSessions.find((group) => group.sessions.some((session) => !isSessionDone(session)))?.title ??
+    groupedSessions[0]?.title ??
+    null;
+
+  if (!didAutoOpenWeek && firstPendingWeekTitle) {
+    setDidAutoOpenWeek(true);
+    setOpenWeeks((current) => ({ ...current, [firstPendingWeekTitle]: true }));
+  }
+
   const completedCount = [...allPlannedSessions, ...allCustomSessions].filter(
     (session) => session.status === "completed"
   ).length;
@@ -371,70 +396,127 @@ export default function ProgramPage() {
       ) : null}
 
       {groupedSessions.length ? (
-        <div className="space-y-8">
-          {groupedSessions.map((group) => (
-            <section key={group.title} className="space-y-4">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="section-title">{group.title}</h2>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Timeline del programma attivo, pronta per il passaggio a log o storico.
-                  </p>
-                </div>
-                <span className="data-chip">{group.sessions.length} sessioni</span>
-              </div>
+        <div className="space-y-3">
+          {groupedSessions.map((group) => {
+            const weekKey = group.title;
+            const doneInWeek = group.sessions.filter(isSessionDone).length;
+            const isWeekOpen = openWeeks[weekKey] ?? false;
 
-              <div className="space-y-4">
-                {group.sessions.map((session) => (
-                  <Card key={session.id}>
-                    <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="space-y-2">
-                        <CardTitle className="text-2xl">
-                          {formatDateLabel(session.sessionDate)}
-                        </CardTitle>
-                        <p className="text-sm text-muted-foreground">
-                          {session.dayLabel ?? "Sessione senza etichetta"}
-                        </p>
-                      </div>
-                      <StatusBadge status={session.status} />
-                    </CardHeader>
-                    <CardContent className="space-y-5">
-                      <div className="grid gap-3">
-                        {session.exercises.map((exercise) => (
-                          <div key={exercise.id} className="list-row">
-                            <p className="font-medium text-foreground">{exercise.exerciseName}</p>
-                            <p className="mt-1 text-sm text-muted-foreground">
-                              {formatExercisePrescription(exercise)}
+            return (
+            <section key={group.title} className="surface overflow-hidden">
+              <button
+                type="button"
+                onClick={() => toggleWeek(weekKey)}
+                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-white/[0.03]"
+                aria-expanded={isWeekOpen}
+              >
+                <div className="flex items-center gap-3">
+                  <ChevronRight
+                    className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                      isWeekOpen ? "rotate-90" : ""
+                    }`}
+                  />
+                  <div>
+                    <h2 className="text-base font-semibold text-foreground">{group.title}</h2>
+                    <p className="text-[11px] text-muted-foreground">
+                      {group.sessions.length} allenamenti · {doneInWeek} completati
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  {doneInWeek === group.sessions.length ? (
+                    <span className="rounded-full bg-success/15 px-2.5 py-0.5 text-[11px] font-medium text-success">
+                      Completata
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-0.5 text-[11px] text-muted-foreground">
+                      {group.sessions.length - doneInWeek} da fare
+                    </span>
+                  )}
+                </div>
+              </button>
+
+              {isWeekOpen ? (
+              <div className="space-y-2 border-t border-white/[0.06] p-3">
+                {group.sessions.map((session) => {
+                  const isSessionOpen = openSessions[session.id] ?? false;
+
+                  return (
+                    <div
+                      key={session.id}
+                      className="rounded-lg border border-white/[0.06] bg-white/[0.02]"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleSession(session.id)}
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-white/[0.03]"
+                        aria-expanded={isSessionOpen}
+                      >
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <ChevronRight
+                            className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${
+                              isSessionOpen ? "rotate-90" : ""
+                            }`}
+                          />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-foreground">
+                              {session.dayLabel ?? "Sessione senza etichetta"}
                             </p>
-                            {exercise.plannedNotes ? (
-                              <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
-                                {exercise.plannedNotes}
-                              </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {formatDateLabel(session.sessionDate)} · {session.exercises.length} esercizi
+                            </p>
+                          </div>
+                        </div>
+                        <StatusBadge status={session.status} />
+                      </button>
+
+                      {isSessionOpen ? (
+                        <div className="space-y-3 border-t border-white/[0.06] p-3">
+                          <div className="grid gap-2">
+                            {session.exercises.map((exercise) => (
+                              <div
+                                key={exercise.id}
+                                className="rounded-md border border-white/[0.06] bg-white/[0.02] px-3 py-2"
+                              >
+                                <p className="text-sm font-medium text-foreground">
+                                  {exercise.exerciseName}
+                                </p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">
+                                  {formatExercisePrescription(exercise) || "Nessun target definito"}
+                                </p>
+                                {exercise.plannedNotes ? (
+                                  <p className="mt-1 text-[11px] text-muted-foreground/80">
+                                    {exercise.plannedNotes}
+                                  </p>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="flex flex-wrap gap-2">
+                            <Button asChild size="sm">
+                              <Link href={`/log/${session.id}` as Route}>
+                                {session.status === "planned"
+                                  ? "Registra allenamento"
+                                  : "Aggiorna registrazione"}
+                              </Link>
+                            </Button>
+                            {session.status !== "planned" ? (
+                              <Button asChild size="sm" variant="outline">
+                                <Link href={`/history/${session.id}` as Route}>Apri dettaglio</Link>
+                              </Button>
                             ) : null}
                           </div>
-                        ))}
-                      </div>
-
-                      <div className="flex flex-wrap gap-3">
-                        <Button asChild>
-                          <Link href={`/log/${session.id}` as Route}>
-                            {session.status === "planned"
-                              ? "Registra allenamento"
-                              : "Aggiorna registrazione"}
-                          </Link>
-                        </Button>
-                        {session.status !== "planned" ? (
-                          <Button asChild variant="outline">
-                            <Link href={`/history/${session.id}` as Route}>Apri dettaglio</Link>
-                          </Button>
-                        ) : null}
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
+              ) : null}
             </section>
-          ))}
+            );
+          })}
         </div>
       ) : null}
 
