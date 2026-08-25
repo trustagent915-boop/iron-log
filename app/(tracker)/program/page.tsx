@@ -140,17 +140,27 @@ export default function ProgramPage() {
   const customSessions = allCustomSessions.filter(
     (session) => selectedStatus === "all" || session.status === selectedStatus
   );
-  // Sessioni completate in fondo a ogni settimana; le settimane ancora
-  // aperte salgono sopra quelle già tutte chiuse.
+  // Dentro ogni settimana: allenamenti da fare in cima, completati in fondo.
+  // Tra settimane: quelle ancora aperte prima di quelle chiuse, ma sempre
+  // in ordine numerico crescente (Settimana 1, 2, 3...) — altrimenti
+  // l'ordine seguirebbe quello dei dati e le settimane apparirebbero
+  // mescolate.
   const groupedSessions = groupSessionsByWeek(plannedSessions)
-    .map((group) => ({ ...group, sessions: sortSessionsPendingFirst(group.sessions) }))
+    .map((group) => ({
+      ...group,
+      sessions: sortSessionsPendingFirst(group.sessions),
+      weekNumber: group.sessions[0]?.weekNumber ?? null
+    }))
     .sort((left, right) => {
       const leftPending = left.sessions.some((session) => !isSessionDone(session));
       const rightPending = right.sessions.some((session) => !isSessionDone(session));
-      if (leftPending === rightPending) {
-        return 0;
+      if (leftPending !== rightPending) {
+        return leftPending ? -1 : 1;
       }
-      return leftPending ? -1 : 1;
+      // Settimane senza numero sempre in fondo al proprio blocco
+      if (left.weekNumber === null) return right.weekNumber === null ? 0 : 1;
+      if (right.weekNumber === null) return -1;
+      return left.weekNumber - right.weekNumber;
     });
   const sortedCustomSessions = sortSessionsPendingFirst(customSessions);
   const completedCount = [...allPlannedSessions, ...allCustomSessions].filter(
