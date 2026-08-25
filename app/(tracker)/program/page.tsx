@@ -153,16 +153,75 @@ export default function ProgramPage() {
   const customSessions = allCustomSessions.filter(
     (session) => selectedStatus === "all" || session.status === selectedStatus
   );
+  // Le settimane nascono dalle sessioni pianificate (che portano il
+  // weekNumber). I workout extra (es. braccio di ferro) non hanno un
+  // weekNumber, quindi li assegno alla settimana che copre la loro data:
+  // vanno letti dentro il blocco della settimana, non in cima alla pagina.
+  const baseWeekGroups = groupSessionsByWeek(plannedSessions).map((group) => {
+    const dates = group.sessions.map((session) => session.sessionDate).sort();
+    return {
+      title: group.title,
+      sessions: [...group.sessions],
+      weekNumber: group.sessions[0]?.weekNumber ?? null,
+      startDate: dates[0] ?? null,
+      endDate: dates[dates.length - 1] ?? null
+    };
+  });
+  const weeksByNumber = [...baseWeekGroups].sort((left, right) => {
+    if (left.weekNumber === null) return right.weekNumber === null ? 0 : 1;
+    if (right.weekNumber === null) return -1;
+    return left.weekNumber - right.weekNumber;
+  });
+
+  function dayDistance(left: string, right: string) {
+    const leftTime = new Date(`${left}T00:00:00`).getTime();
+    const rightTime = new Date(`${right}T00:00:00`).getTime();
+    if (Number.isNaN(leftTime) || Number.isNaN(rightTime)) {
+      return Number.POSITIVE_INFINITY;
+    }
+    return Math.abs(leftTime - rightTime) / 86_400_000;
+  }
+
+  // Assegno l'extra alla settimana dell'allenamento pianificato più vicino
+  // come data. Usare l'intervallo min-max della settimana era fragile:
+  // basta una seduta con data anomala per allargare il range di una
+  // settimana e catturare sessioni che appartengono altrove.
+  function findWeekForDate(sessionDate: string) {
+    let bestWeek: (typeof weeksByNumber)[number] | null = null;
+    let bestDistance = Number.POSITIVE_INFINITY;
+
+    for (const week of weeksByNumber) {
+      for (const planned of week.sessions) {
+        const distance = dayDistance(sessionDate, planned.sessionDate);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestWeek = week;
+        }
+      }
+    }
+
+    return bestWeek;
+  }
+
+  const orphanCustomSessions: SessionWithExercises[] = [];
+  customSessions.forEach((session) => {
+    const week = findWeekForDate(session.sessionDate);
+    if (week) {
+      week.sessions.push(session);
+    } else {
+      orphanCustomSessions.push(session);
+    }
+  });
+
   // Dentro ogni settimana: allenamenti da fare in cima, completati in fondo.
   // Tra settimane: quelle ancora aperte prima di quelle chiuse, ma sempre
   // in ordine numerico crescente (Settimana 1, 2, 3...) — altrimenti
   // l'ordine seguirebbe quello dei dati e le settimane apparirebbero
   // mescolate.
-  const groupedSessions = groupSessionsByWeek(plannedSessions)
+  const groupedSessions = baseWeekGroups
     .map((group) => ({
       ...group,
-      sessions: sortSessionsPendingFirst(group.sessions),
-      weekNumber: group.sessions[0]?.weekNumber ?? null
+      sessions: sortSessionsPendingFirst(group.sessions)
     }))
     .sort((left, right) => {
       const leftPending = left.sessions.some((session) => !isSessionDone(session));
@@ -175,7 +234,8 @@ export default function ProgramPage() {
       if (right.weekNumber === null) return -1;
       return left.weekNumber - right.weekNumber;
     });
-  const sortedCustomSessions = sortSessionsPendingFirst(customSessions);
+  // Restano fuori solo se non esiste nessuna settimana (piano senza timeline)
+  const sortedCustomSessions = sortSessionsPendingFirst(orphanCustomSessions);
   // Apri automaticamente la prima settimana ancora da completare, una sola
   // volta: così atterri sulla settimana corrente senza dover cliccare.
   const firstPendingWeekTitle =
@@ -325,17 +385,16 @@ export default function ProgramPage() {
         </Card>
       ) : null}
 
-      {customSessions.length ? (
+      {sortedCustomSessions.length ? (
         <section className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <h2 className="section-title">Custom workout</h2>
+              <h2 className="section-title">Sessioni fuori blocco</h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Sedute extra tenute separate dal calendario principale per non sporcare la lettura
-                del piano.
+                Sedute extra la cui data non rientra in nessuna settimana del piano attivo.
               </p>
             </div>
-            <span className="data-chip">{customSessions.length} sessioni extra</span>
+            <span className="data-chip">{sortedCustomSessions.length} sessioni</span>
           </div>
 
           <div className="space-y-4">
@@ -459,8 +518,15 @@ export default function ProgramPage() {
                             }`}
                           />
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-foreground">
-                              {session.dayLabel ?? "Sessione senza etichetta"}
+                            <p className="flex items-center gap-2 truncate text-sm font-medium text-foreground">
+                              <span className="truncate">
+                                {session.dayLabel ?? "Sessione senza etichetta"}
+                              </span>
+                              {session.kind === "custom" ? (
+                                <span className="shrink-0 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary">
+                                  Extra
+                                </span>
+                              ) : null}
                             </p>
                             <p className="text-[11px] text-muted-foreground">
                               {formatDateLabel(session.sessionDate)} · {session.exercises.length} esercizi
