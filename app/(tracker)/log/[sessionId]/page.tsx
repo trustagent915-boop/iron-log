@@ -16,6 +16,7 @@ import {
   formatCompactNumber,
   formatCompactWeight,
   formatDateLabel,
+  getExercisePersonalRecordLabel,
   isSkippedExerciseLog,
   parseInputNumber,
   stripSkippedToken
@@ -91,7 +92,7 @@ function PlannedChip({
 export default function LogWorkoutPage() {
   const params = useParams<{ sessionId: string }>();
   const router = useRouter();
-  const { findSessionDetails, isReady, saveWorkoutLog, syncStatus } = useArmTracker();
+  const { data, findSessionDetails, isReady, saveWorkoutLog, syncStatus } = useArmTracker();
   const [performedDate, setPerformedDate] = useState("");
   const [bodyweightInput, setBodyweightInput] = useState("");
   const [overallNotes, setOverallNotes] = useState("");
@@ -289,6 +290,10 @@ export default function LogWorkoutPage() {
             skipped: false
           };
           const showSecondsField = isIsometryExerciseName(draft.exerciseName ?? exercise.exerciseName);
+          const personalRecordLabel = getExercisePersonalRecordLabel(
+            data,
+            draft.exerciseName || exercise.exerciseName
+          );
 
           return (
             <Card key={exercise.id}>
@@ -478,7 +483,12 @@ export default function LogWorkoutPage() {
                       updateDraft(exercise.id, { notes: event.target.value })
                     }
                     disabled={draft.skipped}
-                    placeholder="Tecnica, buffer, sensazioni o eventuali modifiche sul momento."
+                    // Il placeholder mostra il record attuale per questo
+                    // esercizio, così ce l'hai sott'occhio mentre registri.
+                    placeholder={
+                      personalRecordLabel ??
+                      "Tecnica, buffer, sensazioni o eventuali modifiche sul momento."
+                    }
                   />
                 </div>
               </CardContent>

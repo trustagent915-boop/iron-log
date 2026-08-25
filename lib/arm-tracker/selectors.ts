@@ -499,6 +499,105 @@ function getExerciseKey(rawName: string) {
   return normalizeQuery(canonicalizeExerciseName(rawName));
 }
 
+/**
+ * Miglior prestazione registrata per un esercizio, pronta da mostrare come
+ * placeholder nel campo note del log (es. "PR: 50 kg x 3 - 21 ago 2026").
+ * Sceglie il criterio migliore in base a cosa è stato registrato:
+ * peso > secondi di tenuta > reps a corpo libero.
+ * Ritorna null se non c'è ancora nessun record per quell'esercizio.
+ */
+export function getExercisePersonalRecordLabel(
+  data: ArmTrackerData,
+  exerciseName: string
+): string | null {
+  // Confronto sul nome esatto (normalizzato), NON sulla canonicalizzazione:
+  // quest'ultima accorpa varianti diverse — es. la riga legacy
+  // "Trazioni [90kg]" finiva sotto "Pull Up zavorrato" e mostrava un PR
+  // di 90 kg al posto di quello reale.
+  const targetKey = normalizeQuery(exerciseName);
+
+  if (!targetKey) {
+    return null;
+  }
+
+  const workoutLogMap = new Map(data.workoutLogs.map((log) => [log.id, log]));
+
+  let bestWeight: { weight: number; reps: number | null; date: string | null } | null = null;
+  let bestSeconds: { seconds: number; date: string | null } | null = null;
+  let bestReps: { reps: number; date: string | null } | null = null;
+
+  data.exerciseLogs.forEach((exerciseLog) => {
+    if (normalizeQuery(exerciseLog.exerciseNameSnapshot) !== targetKey) {
+      return;
+    }
+
+    if (isSkippedExerciseLog(exerciseLog)) {
+      return;
+    }
+
+    const performedDate = workoutLogMap.get(exerciseLog.workoutLogId)?.performedDate ?? null;
+
+    // Un PR a peso è valido solo se accompagnato da reps o set reali.
+    // I vecchi import CSV hanno righe spazzatura tipo
+    // "Trazioni [X100 Curl 30kg]" dove il "x100" del titolo è finito nel
+    // campo peso senza reps: senza questo filtro mostrerebbero PR falsi.
+    const hasRealEffort =
+      (exerciseLog.actualReps !== null && exerciseLog.actualReps > 0) ||
+      (exerciseLog.actualSets !== null && exerciseLog.actualSets > 0);
+
+    if (
+      hasRealEffort &&
+      exerciseLog.actualWeight !== null &&
+      exerciseLog.actualWeight > 0 &&
+      (bestWeight === null || exerciseLog.actualWeight > bestWeight.weight)
+    ) {
+      bestWeight = {
+        weight: exerciseLog.actualWeight,
+        reps: exerciseLog.actualReps,
+        date: performedDate
+      };
+    }
+
+    if (
+      exerciseLog.actualSeconds !== null &&
+      exerciseLog.actualSeconds > 0 &&
+      (bestSeconds === null || exerciseLog.actualSeconds > bestSeconds.seconds)
+    ) {
+      bestSeconds = { seconds: exerciseLog.actualSeconds, date: performedDate };
+    }
+
+    if (
+      exerciseLog.actualReps !== null &&
+      exerciseLog.actualReps > 0 &&
+      (bestReps === null || exerciseLog.actualReps > bestReps.reps)
+    ) {
+      bestReps = { reps: exerciseLog.actualReps, date: performedDate };
+    }
+  });
+
+  function withDate(text: string, date: string | null) {
+    return date ? `${text} - ${formatDateLabel(date)}` : text;
+  }
+
+  if (bestWeight !== null) {
+    const record = bestWeight as { weight: number; reps: number | null; date: string | null };
+    const repsPart = record.reps && record.reps > 0 ? ` x ${record.reps}` : "";
+    return withDate(`PR: ${formatCompactWeight(record.weight)}${repsPart}`, record.date);
+  }
+
+  if (bestSeconds !== null) {
+    const record = bestSeconds as { seconds: number; date: string | null };
+    return withDate(`PR: ${record.seconds}s`, record.date);
+  }
+
+  if (bestReps !== null) {
+    const record = bestReps as { reps: number; date: string | null };
+    return withDate(`PR: ${record.reps} reps`, record.date);
+  }
+
+  return null;
+}
+
 export function formatDateLabel(dateString: string | null, pattern = "d MMM yyyy") {
   if (!dateString) {
     return "Data non disponibile";
