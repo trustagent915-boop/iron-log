@@ -16,3 +16,6 @@ npm-debug.log*
 
 .vercel
 supabase/.temp/
+
+# Backup snapshot locali (grandi, non vanno in git)
+docs/backups/
