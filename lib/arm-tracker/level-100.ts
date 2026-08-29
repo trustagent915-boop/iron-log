@@ -390,7 +390,10 @@ export function getLevel100ExerciseRule(exerciseName: string): Level100Rule {
       // braccio di ferro (va prima del ramo "cavo", che lo renderebbe non
       // punteggiabile) e lo static hold è una tenuta zavorrata da tavolo.
       "curl gancio",
-      "static hold"
+      "static hold",
+      // Hammer curl: nel programma è "manubrio fisso da 27,5 kg", quindi
+      // carico per singolo braccio come gli altri lavori di braccia.
+      "hammer curl"
     ])
   ) {
     return level100Rules.arms;
