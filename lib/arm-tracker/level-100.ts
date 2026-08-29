@@ -264,6 +264,12 @@ export function canonicalizeLevel100ExerciseName(rawName: string) {
     return "Dip";
   }
 
+  // "inside pressure" contiene letteralmente "side pressure": va controllato
+  // prima, altrimenti i suoi record finiscono nel bucket di Side Pressure.
+  if (includesAny(normalized, ["inside pressure"])) {
+    return formatArmwrestlingExerciseName("Inside Pressure", normalized);
+  }
+
   if (includesAny(normalized, ["side pressure"])) {
     return formatArmwrestlingExerciseName("Side Pressure", normalized);
   }
@@ -332,6 +338,12 @@ export function canonicalizeLevel100ExerciseName(rawName: string) {
     return rawName.replace(/\s+/g, " ").trim();
   }
 
+  // Curl specifici da tenere distinti: il catch-all "curl" qui sotto
+  // schiaccerebbe tutto in un unico bucket generico.
+  if (includesAny(normalized, ["hammer curl"])) {
+    return "Hammer Curl";
+  }
+
   if (includesAny(normalized, ["curl"])) {
     return "Curl";
   }
@@ -373,7 +385,12 @@ export function getLevel100ExerciseRule(exerciseName: string): Level100Rule {
       "pronation",
       "supination",
       "wrist",
-      "rising belt curl"
+      "rising belt curl",
+      // Movimenti da tavolo aggiunti: il curl gancio è un curl specifico da
+      // braccio di ferro (va prima del ramo "cavo", che lo renderebbe non
+      // punteggiabile) e lo static hold è una tenuta zavorrata da tavolo.
+      "curl gancio",
+      "static hold"
     ])
   ) {
     return level100Rules.arms;
@@ -466,12 +483,19 @@ function isValidLevel100Record(exerciseLog: WorkoutExerciseLog, bodyweightKg: nu
     return (exerciseLog.actualReps ?? 0) >= 1 && bodyweightKg > 0;
   }
 
+  // Di norma un record vale con almeno 3 reps pulite. Per i movimenti da
+  // tavolo (arms) accetto in alternativa una tenuta di almeno 10 secondi:
+  // esercizi come lo static hold si misurano in secondi, non in ripetizioni.
+  const meetsEffort =
+    (exerciseLog.actualReps ?? 0) >= 3 ||
+    (rule.id === "arms" && (exerciseLog.actualSeconds ?? 0) >= 10);
+
   return (
     exerciseLog.actualWeight !== null &&
     Number.isFinite(exerciseLog.actualWeight) &&
     exerciseLog.actualWeight > 0 &&
     exerciseLog.actualWeight <= maxReasonableRecordWeight &&
-    (exerciseLog.actualReps ?? 0) >= 3
+    meetsEffort
   );
 }
 
