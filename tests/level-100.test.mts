@@ -424,3 +424,57 @@ test("adds six planned competition prep workouts without duplicating them", () =
     )
   );
 });
+
+test("table movements trained in the current block score with the arms rule", () => {
+  // Curl gancio veniva classificato come "macchina/cavo" (non punteggiabile)
+  // perché il nome contiene "cavo"; static hold cadeva su "classic" kg x 1.
+  // Sono entrambi movimenti da tavolo: devono valere kg x 2.
+  assert.equal(getLevel100ExerciseRule("Curl Gancio al Cavo Frontale").id, "arms");
+  assert.equal(getLevel100ExerciseRule("Static Hold").id, "arms");
+  assert.equal(getLevel100ExerciseRule("Inside Pressure").id, "arms");
+
+  assert.equal(
+    getLevel100Score({ exerciseName: "Curl Gancio al Cavo Frontale", weight: 35, reps: 4 }),
+    70
+  );
+  assert.equal(getLevel100Score({ exerciseName: "Static Hold", weight: 40, reps: 1 }), 80);
+});
+
+test("an arms hold validates on ten seconds even without three reps", () => {
+  const data = createData();
+  data.workoutLogs.push({
+    id: "log-hold",
+    planSessionId: "session-hold",
+    performedDate: "2026-08-25",
+    bodyweightKg: 90,
+    overallNotes: null,
+    completionStatus: "completed",
+    createdAt: "2026-08-25T10:00:00.000Z"
+  });
+  data.exerciseLogs.push({
+    id: "ex-hold",
+    workoutLogId: "log-hold",
+    planExerciseId: "plan-ex-hold",
+    exerciseNameSnapshot: "Static Hold",
+    plannedSetsSnapshot: null,
+    plannedRepsSnapshot: null,
+    plannedWeightSnapshot: null,
+    plannedNotesSnapshot: null,
+    actualWeight: 40,
+    actualReps: 1,
+    actualSets: 5,
+    actualSeconds: 12,
+    notes: null,
+    performedOrder: 0
+  });
+
+  const dashboard = buildLevel100Dashboard(data, {
+    bodyweightKg: 90,
+    pinnedExerciseNames: ["Static Hold"]
+  });
+  const hold = dashboard.exercises.find((entry) => entry.exerciseName === "Static Hold");
+
+  assert.ok(hold, "Static Hold deve comparire nella dashboard");
+  assert.equal(hold?.validRecordCount, 1);
+  assert.equal(hold?.level, 80);
+});
