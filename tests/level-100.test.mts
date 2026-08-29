@@ -478,3 +478,16 @@ test("an arms hold validates on ten seconds even without three reps", () => {
   assert.equal(hold?.validRecordCount, 1);
   assert.equal(hold?.level, 80);
 });
+
+test("single-arm dumbbell curls score on the arms scale, not as a two-arm classic", () => {
+  // Il programma prescrive "manubrio fisso da 27,5 kg": è un carico per
+  // braccio, quindi va sulla stessa scala degli altri lavori di braccia
+  // (kg x 2), altrimenti risulterebbe assurdamente più basso di un rising
+  // belt curl con carico minore.
+  assert.equal(getLevel100ExerciseRule("Hammer Curl").id, "arms");
+  assert.equal(getLevel100Score({ exerciseName: "Hammer Curl", weight: 27.5, reps: 8 }), 55);
+
+  const rising = getLevel100Score({ exerciseName: "Rising Belt Curl", weight: 25, reps: 10 });
+  const hammer = getLevel100Score({ exerciseName: "Hammer Curl", weight: 27.5, reps: 8 });
+  assert.ok(hammer > rising, "carico maggiore deve dare livello maggiore");
+});
