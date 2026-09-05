@@ -91,38 +91,58 @@ export function getProgressionVerdict(input: ProgressionInput): ProgressionVerdi
     };
   }
 
-  // Esercizi a sola tenuta (nessun peso ne ripetizioni previste): progrediscono
-  // sui secondi. Il peso registrato li e il peso corporeo, non un carico da
-  // aumentare: trattarlo come tale proporrebbe salti senza senso.
-  if (plannedWeight === null && plannedReps === null) {
-    const target = plannedHoldSeconds ?? 10;
+  // Nessun carico prescritto = non c'e' niente da aumentare in chili. Vale per
+  // le tenute e per gli esercizi a corpo libero o con elastico: il peso che
+  // Jack registra li e il suo peso corporeo, non un carico. Trattarlo come tale
+  // proponeva salti senza senso tipo "sali a 98 kg" sulla iso a un braccio.
+  if (plannedWeight === null) {
+    const target = plannedHoldSeconds ?? (plannedReps === null ? 10 : null);
 
-    if (last.seconds === null) {
+    if (target !== null) {
+      if (last.seconds === null) {
+        return {
+          action: "dati-mancanti",
+          suggestedWeight: null,
+          suggestedReps: plannedReps,
+          suggestedSeconds: target,
+          reason: `Tenuta non registrata: segna i secondi, obiettivo ${target}s.`
+        };
+      }
+
+      if (last.seconds >= target) {
+        return {
+          action: "aumenta",
+          suggestedWeight: null,
+          suggestedReps: plannedReps,
+          suggestedSeconds: target + 1,
+          reason: `Hai tenuto ${last.seconds}s con obiettivo ${target}s: sali a ${target + 1}s.`
+        };
+      }
+
       return {
-        action: "dati-mancanti",
+        action: "mantieni",
         suggestedWeight: null,
-        suggestedReps: null,
+        suggestedReps: plannedReps,
         suggestedSeconds: target,
-        reason: `Tenuta non registrata: segna i secondi, obiettivo ${target}s.`
+        reason: `Tenuta a ${last.seconds}s, obiettivo ${target}s: resta qui finche non lo chiudi.`
       };
     }
 
-    if (last.seconds >= target) {
+    // Solo ripetizioni, nessun carico: si progredisce a ripetizioni.
+    if (plannedReps !== null && (last.reps ?? 0) >= plannedReps) {
       return {
         action: "aumenta",
         suggestedWeight: null,
-        suggestedReps: null,
-        suggestedSeconds: target + 1,
-        reason: `Hai tenuto ${last.seconds}s con obiettivo ${target}s: sali a ${target + 1}s.`
+        suggestedReps: plannedReps + 1,
+        reason: `Hai chiuso ${last.reps} reps senza carico prescritto: sali di una ripetizione.`
       };
     }
 
     return {
       action: "mantieni",
       suggestedWeight: null,
-      suggestedReps: null,
-      suggestedSeconds: target,
-      reason: `Tenuta a ${last.seconds}s, obiettivo ${target}s: resta qui finche non lo chiudi.`
+      suggestedReps: plannedReps,
+      reason: "Nessun carico prescritto: ripeti la prescrizione."
     };
   }
 

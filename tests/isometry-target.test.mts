@@ -3,82 +3,22 @@ import test from "node:test";
 
 import {
   getIsometryTargetSeconds,
-  getIsometryHoldCount,
-  parsePrescribedHoldSeconds,
-  hasReachedIsometryTarget
+  hasReachedIsometryTarget,
+  isometryTotalTargetSeconds
 } from "../lib/arm-tracker/isometry-target.ts";
 
-test("the isometric target scales down as the set gets heavier", () => {
-  // Meno ripetizioni previste = carico piu' vicino al massimale = tenuta piu'
-  // breve. Un obiettivo unico da 10s sarebbe impossibile sulle triple.
-  assert.equal(getIsometryTargetSeconds(3), 5);
-  assert.equal(getIsometryTargetSeconds(4), 6);
-  assert.equal(getIsometryTargetSeconds(5), 8);
-  assert.equal(getIsometryTargetSeconds(6), 9);
-  assert.equal(getIsometryTargetSeconds(8), 12);
-
-  const pesante = getIsometryTargetSeconds(3);
-  const leggero = getIsometryTargetSeconds(8);
-  assert.ok(leggero > pesante, "piu' reps deve dare una tenuta piu' lunga");
+test("every exercise carries the same ten second isometric total", () => {
+  // Obiettivo unico e cumulativo: su un carico pesante ci arrivi con due
+  // tenute da 5s, su un gesto quasi massimale con cinque da 2s. Una durata
+  // scalata per esercizio chiedeva tenute singole impossibili sul pesante.
+  assert.equal(isometryTotalTargetSeconds, 10);
+  assert.equal(getIsometryTargetSeconds(), 10);
 });
 
-test("the target stays inside the strength range", () => {
-  // Tetto a 12s: oltre e' resistenza, non forza.
-  assert.equal(getIsometryTargetSeconds(10), 12);
-  assert.equal(getIsometryTargetSeconds(20), 12);
-  // Pavimento a 5s: sotto non c'e' stimolo isometrico.
-  assert.equal(getIsometryTargetSeconds(1), 5);
-  assert.equal(getIsometryTargetSeconds(2), 5);
-});
-
-test("a pure hold targets the ten seconds that validate a record", () => {
-  assert.equal(getIsometryTargetSeconds(null), 10);
-  assert.equal(getIsometryTargetSeconds(undefined), 10);
-  assert.equal(getIsometryTargetSeconds(0), 10);
-});
-
-test("the target is only reached from the target upwards", () => {
-  assert.equal(hasReachedIsometryTarget(8, 8), true);
-  assert.equal(hasReachedIsometryTarget(9, 8), true);
-  assert.equal(hasReachedIsometryTarget(7, 8), false);
-  assert.equal(hasReachedIsometryTarget(null, 8), false);
-});
-
-test("a hold prescribed in the programme notes wins over the estimate", () => {
-  // Le note del blocco progrediscono 1s -> 2s -> 3s sulla iso a un braccio.
-  // Una tenuta a un braccio al peso corporeo e quasi massimale: imporle il
-  // default da 10s sarebbe irrealistico e renderebbe l'obiettivo inutile.
-  assert.equal(
-    getIsometryTargetSeconds(null, "5 tentativi da 1 secondo. Registra il peso corporeo."),
-    1
-  );
-  assert.equal(getIsometryTargetSeconds(null, "5 tentativi da 2 secondi."), 2);
-  assert.equal(getIsometryTargetSeconds(null, "5 tentativi da 3 secondi."), 3);
-  // Su un intervallo conta il limite alto, che e il vero obiettivo.
-  assert.equal(getIsometryTargetSeconds(null, "4 tentativi da 2-3 secondi."), 3);
-  // La prescrizione batte anche la stima sulle reps.
-  assert.equal(getIsometryTargetSeconds(6, "tenuta da 4 secondi"), 4);
-});
-
-test("notes without a prescribed hold fall back to the estimate", () => {
-  assert.equal(getIsometryTargetSeconds(null, "5 tentativi puliti."), 10);
-  assert.equal(getIsometryTargetSeconds(4, "3 negative leggere. Scarico."), 6);
-  assert.equal(getIsometryTargetSeconds(4, null), 6);
-});
-
-test("parsePrescribedHoldSeconds reads only real prescriptions", () => {
-  assert.equal(parsePrescribedHoldSeconds(null), null);
-  assert.equal(parsePrescribedHoldSeconds("4 tentativi tecnici"), null);
-  assert.equal(parsePrescribedHoldSeconds("tenuta da 10 secondi"), 10);
-});
-
-test("the number of holds follows how many sets the exercise has", () => {
-  // Una tenuta sola su 5 serie e uno stimolo trascurabile; una per serie
-  // degrada le serie pesanti iniziali. Vanno sulle ultime.
-  assert.equal(getIsometryHoldCount(5), 3);
-  assert.equal(getIsometryHoldCount(4), 2);
-  assert.equal(getIsometryHoldCount(3), 1);
-  assert.equal(getIsometryHoldCount(null), 1);
-  // Tetto a 3 anche con molte serie: oltre crolla la qualita.
-  assert.equal(getIsometryHoldCount(8), 3);
+test("the target is reached on the accumulated total, however it is split", () => {
+  assert.equal(hasReachedIsometryTarget(10), true);
+  assert.equal(hasReachedIsometryTarget(12), true);
+  assert.equal(hasReachedIsometryTarget(9), false);
+  assert.equal(hasReachedIsometryTarget(0), false);
+  assert.equal(hasReachedIsometryTarget(null), false);
 });

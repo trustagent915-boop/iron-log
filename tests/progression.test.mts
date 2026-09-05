@@ -154,3 +154,34 @@ test("a pure hold progresses on seconds, never on the bodyweight it logs", () =>
   assert.equal(chiuso.suggestedSeconds, 3);
   assert.equal(chiuso.suggestedWeight, null);
 });
+
+test("no prescribed load never turns bodyweight into a weight jump", () => {
+  // Caso reale: OAP unificato, 3 serie con reps da elastico e tenuta da 2s.
+  // Con solo il controllo su plannedReps === null questo ricadeva nel ramo a
+  // carico e proponeva di salire dal peso corporeo registrato (93 kg).
+  const verdict = getProgressionVerdict({
+    exerciseName: "One Arm Pull Up Iso",
+    plannedWeight: null,
+    plannedReps: 3,
+    plannedHoldSeconds: 2,
+    history: [sample({ weight: 93, reps: 3, seconds: 1 })]
+  });
+
+  assert.equal(verdict.action, "mantieni");
+  assert.equal(verdict.suggestedWeight, null);
+  assert.equal(verdict.suggestedSeconds, 2);
+  assert.doesNotMatch(verdict.reason, /kg/);
+});
+
+test("bodyweight reps without a prescribed load progress on reps", () => {
+  const verdict = getProgressionVerdict({
+    exerciseName: "One Arm Pull Up assistito (elastico)",
+    plannedWeight: null,
+    plannedReps: 3,
+    history: [sample({ weight: null, reps: 3, seconds: null })]
+  });
+
+  assert.equal(verdict.action, "aumenta");
+  assert.equal(verdict.suggestedWeight, null);
+  assert.equal(verdict.suggestedReps, 4);
+});

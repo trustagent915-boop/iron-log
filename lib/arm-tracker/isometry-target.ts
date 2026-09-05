@@ -1,96 +1,25 @@
 /**
- * Obiettivo di tenuta isometrica da fare a fine esercizio, allo stesso peso
- * usato per le ripetizioni.
+ * Isometria di fine esercizio: dopo le ripetizioni principali si accumulano
+ * secondi di tenuta allo stesso peso, fino a un totale di 10 secondi.
  *
- * La durata NON puo' essere fissa: le ripetizioni previste sono un proxy
- * dell'intensita' relativa. A 3 reps sei vicino al massimale e dopo la serie
- * reggi pochi secondi; a 8-10 reps il carico e' piu' basso e la tenuta puo'
- * durare molto di piu'. Un obiettivo unico da 10s sarebbe irrealistico sul
- * pesante e troppo facile sul leggero — in entrambi i casi non allenerebbe
- * la forza.
+ * L'obiettivo e' il TOTALE, non la singola tenuta. Su un carico pesante puoi
+ * arrivarci con due tenute da 5s; su un gesto quasi massimale come la trazione
+ * a un braccio ci arrivi con cinque tentativi da 2s, o dieci da 1s. Non conta
+ * come li spezzi: conta che a fine esercizio i secondi sommati siano 10.
  *
- * Regola: circa 1,5 secondi per ogni ripetizione prevista, con un tetto a 12s
- * (oltre si scivola nel lavoro di resistenza, che non e' l'obiettivo) e un
- * minimo di 5s (sotto non c'e' stimolo isometrico utile).
- *
- * Gli esercizi che sono gia' isometrie di loro (nessuna ripetizione prevista)
- * puntano a 10s, la soglia con cui il record diventa valido sulla dashboard.
+ * Un obiettivo unico ha due vantaggi rispetto a una durata scalata per
+ * esercizio: e' uno solo da ricordare, e non chiede mai una tenuta singola che
+ * su un carico vicino al massimale sarebbe impossibile.
  */
-export const isometryTargetFloorSeconds = 5;
-export const isometryTargetCapSeconds = 12;
-export const isometryTargetForPureHoldSeconds = 10;
+export const isometryTotalTargetSeconds = 10;
 
-/**
- * Legge una tenuta prescritta dalle note del programma, es.
- * "5 tentativi da 2 secondi" -> 2, "4 tentativi da 2-3 secondi" -> 3.
- * Su un intervallo prende il limite alto, che e il vero obiettivo.
- */
-export function parsePrescribedHoldSeconds(plannedNotes: string | null | undefined): number | null {
-  if (!plannedNotes) {
-    return null;
-  }
-
-  const match = plannedNotes
-    .toLowerCase()
-    .match(/(\d+(?:[.,]\d+)?)\s*(?:-\s*(\d+(?:[.,]\d+)?)\s*)?second/);
-
-  if (!match) {
-    return null;
-  }
-
-  const raw = match[2] ?? match[1];
-  const parsed = Number(raw.replace(",", "."));
-
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+export function getIsometryTargetSeconds(): number {
+  return isometryTotalTargetSeconds;
 }
 
-export function getIsometryTargetSeconds(
-  plannedReps: number | null | undefined,
-  plannedNotes?: string | null
-): number {
-  // La prescrizione del programma vince su qualsiasi stima: una tenuta a un
-  // braccio al peso corporeo e uno sforzo quasi massimale, dove il programma
-  // chiede 1-3 secondi. Imporre il default generico sarebbe irrealistico.
-  const prescritto = parsePrescribedHoldSeconds(plannedNotes);
-  if (prescritto !== null) {
-    return prescritto;
-  }
-
-  if (
-    plannedReps === null ||
-    plannedReps === undefined ||
-    !Number.isFinite(plannedReps) ||
-    plannedReps <= 0
-  ) {
-    return isometryTargetForPureHoldSeconds;
-  }
-
-  const scaled = Math.round(plannedReps * 1.5);
-
-  return Math.min(isometryTargetCapSeconds, Math.max(isometryTargetFloorSeconds, scaled));
-}
-
-export function hasReachedIsometryTarget(actualSeconds: number | null, targetSeconds: number) {
+export function hasReachedIsometryTarget(
+  actualSeconds: number | null,
+  targetSeconds: number = isometryTotalTargetSeconds
+) {
   return actualSeconds !== null && Number.isFinite(actualSeconds) && actualSeconds >= targetSeconds;
-}
-
-/**
- * Quante tenute fare in un esercizio. Una sola tenuta su una seduta da 5 serie
- * e' uno stimolo trascurabile; farne una per serie invece degrada le serie
- * pesanti iniziali, che restano il lavoro principale.
- *
- * Compromesso: le tenute vanno sulle ULTIME serie, e quante sono dipende da
- * quante serie ci sono. Il tetto e' 3: oltre, la qualita' della tenuta crolla
- * e si accumula solo fatica.
- */
-export function getIsometryHoldCount(plannedSets: number | null | undefined): number {
-  if (!plannedSets || !Number.isFinite(plannedSets) || plannedSets <= 3) {
-    return 1;
-  }
-
-  if (plannedSets === 4) {
-    return 2;
-  }
-
-  return 3;
 }
