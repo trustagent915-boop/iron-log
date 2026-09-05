@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   getIsometryTargetSeconds,
+  getIsometryHoldCount,
   parsePrescribedHoldSeconds,
   hasReachedIsometryTarget
 } from "../lib/arm-tracker/isometry-target.ts";
@@ -69,4 +70,15 @@ test("parsePrescribedHoldSeconds reads only real prescriptions", () => {
   assert.equal(parsePrescribedHoldSeconds(null), null);
   assert.equal(parsePrescribedHoldSeconds("4 tentativi tecnici"), null);
   assert.equal(parsePrescribedHoldSeconds("tenuta da 10 secondi"), 10);
+});
+
+test("the number of holds follows how many sets the exercise has", () => {
+  // Una tenuta sola su 5 serie e uno stimolo trascurabile; una per serie
+  // degrada le serie pesanti iniziali. Vanno sulle ultime.
+  assert.equal(getIsometryHoldCount(5), 3);
+  assert.equal(getIsometryHoldCount(4), 2);
+  assert.equal(getIsometryHoldCount(3), 1);
+  assert.equal(getIsometryHoldCount(null), 1);
+  // Tetto a 3 anche con molte serie: oltre crolla la qualita.
+  assert.equal(getIsometryHoldCount(8), 3);
 });

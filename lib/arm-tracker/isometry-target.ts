@@ -73,3 +73,24 @@ export function getIsometryTargetSeconds(
 export function hasReachedIsometryTarget(actualSeconds: number | null, targetSeconds: number) {
   return actualSeconds !== null && Number.isFinite(actualSeconds) && actualSeconds >= targetSeconds;
 }
+
+/**
+ * Quante tenute fare in un esercizio. Una sola tenuta su una seduta da 5 serie
+ * e' uno stimolo trascurabile; farne una per serie invece degrada le serie
+ * pesanti iniziali, che restano il lavoro principale.
+ *
+ * Compromesso: le tenute vanno sulle ULTIME serie, e quante sono dipende da
+ * quante serie ci sono. Il tetto e' 3: oltre, la qualita' della tenuta crolla
+ * e si accumula solo fatica.
+ */
+export function getIsometryHoldCount(plannedSets: number | null | undefined): number {
+  if (!plannedSets || !Number.isFinite(plannedSets) || plannedSets <= 3) {
+    return 1;
+  }
+
+  if (plannedSets === 4) {
+    return 2;
+  }
+
+  return 3;
+}
