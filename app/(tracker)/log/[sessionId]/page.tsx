@@ -13,7 +13,6 @@ import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { StatusBadge } from "@/features/arm-tracker/status-badge";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
 import {
-  getIsometryHoldCount,
   getIsometryTargetSeconds,
   hasReachedIsometryTarget
 } from "@/lib/arm-tracker/isometry-target";
@@ -300,17 +299,10 @@ export default function LogWorkoutPage() {
           const isPureIsometry = isIsometryExerciseName(
             draft.exerciseName ?? exercise.exerciseName
           );
-          // Obiettivo di tenuta calcolato sulle reps previste: piu il
-          // carico e vicino al massimale, piu la tenuta deve essere breve.
-          const isoTargetSeconds = getIsometryTargetSeconds(
-            exercise.plannedReps,
-            exercise.plannedNotes
-          );
-          const isoHoldCount = getIsometryHoldCount(exercise.plannedSets);
-          const isoReached = hasReachedIsometryTarget(
-            parseInputNumber(draft.actualSeconds),
-            isoTargetSeconds
-          );
+          // Obiettivo unico: 10 secondi di tenuta TOTALI a fine esercizio,
+          // comunque tu li spezzi.
+          const isoTargetSeconds = getIsometryTargetSeconds();
+          const isoReached = hasReachedIsometryTarget(parseInputNumber(draft.actualSeconds));
           const personalRecordLabel = getExercisePersonalRecordLabel(
             data,
             draft.exerciseName || exercise.exerciseName
@@ -350,8 +342,7 @@ export default function LogWorkoutPage() {
                       }
                     />
                     <span className="rounded-full bg-secondary px-3 py-1 text-secondary-foreground">
-                      Iso obiettivo: {isoHoldCount > 1 ? `${isoHoldCount} x ` : ""}
-                      {isoTargetSeconds}s
+                      Iso: {isoTargetSeconds}s totali
                     </span>
                   </div>
                   {(exercise.plannedSets !== null ||
@@ -473,7 +464,7 @@ export default function LogWorkoutPage() {
                         htmlFor={`actual-seconds-${exercise.id}`}
                         className="text-sm font-medium text-foreground"
                       >
-                        {isPureIsometry ? "Secondi tenuta" : "Isometria finale (s)"}
+                        {isPureIsometry ? "Secondi tenuta" : "Isometria finale (s tot)"}
                       </label>
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
@@ -484,7 +475,7 @@ export default function LogWorkoutPage() {
                       >
                         {isoReached
                           ? `Obiettivo ${isoTargetSeconds}s raggiunto`
-                          : `Obiettivo ${isoHoldCount > 1 ? `${isoHoldCount} x ` : ""}${isoTargetSeconds}s`}
+                          : `Obiettivo ${isoTargetSeconds}s totali`}
                       </span>
                     </div>
                       <Input
@@ -496,11 +487,7 @@ export default function LogWorkoutPage() {
                           updateDraft(exercise.id, { actualSeconds: event.target.value })
                         }
                         disabled={draft.skipped}
-                        placeholder={
-                          isoHoldCount > 1
-                            ? `${isoHoldCount} tenute da ${isoTargetSeconds}s, ultime serie`
-                            : `${isoTargetSeconds}s allo stesso peso`
-                        }
+placeholder={`somma delle tenute, obiettivo ${isoTargetSeconds}s`}
                       />
                   </div>
                 </div>

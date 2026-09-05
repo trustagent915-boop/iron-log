@@ -10,7 +10,7 @@
  * Senza --applica non scrive nulla: mostra solo la proposta.
  */
 import { getProgressionVerdict, type PerformanceSample } from "../lib/arm-tracker/progression.ts";
-import { parsePrescribedHoldSeconds } from "../lib/arm-tracker/isometry-target.ts";
+import { isometryTotalTargetSeconds } from "../lib/arm-tracker/isometry-target.ts";
 
 const API = "https://iron-log-deploy.vercel.app/api/arm-tracker/snapshot";
 
@@ -79,7 +79,7 @@ for (const sessione of prossime) {
       exerciseName: ex.exerciseName,
       plannedWeight: ex.plannedWeight,
       plannedReps: ex.plannedReps,
-      plannedHoldSeconds: parsePrescribedHoldSeconds(ex.plannedNotes),
+      plannedHoldSeconds: ex.plannedWeight === null ? isometryTotalTargetSeconds : null,
       history
     });
 
