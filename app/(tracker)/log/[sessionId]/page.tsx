@@ -342,7 +342,7 @@ export default function LogWorkoutPage() {
                       }
                     />
                     <span className="rounded-full bg-secondary px-3 py-1 text-secondary-foreground">
-                      Iso: {isoTargetSeconds}s totali
+                      {isPureIsometry ? `Record: ${isoTargetSeconds}s di fila` : `Iso: ${isoTargetSeconds}s totali`}
                     </span>
                   </div>
                   {(exercise.plannedSets !== null ||
@@ -475,7 +475,9 @@ export default function LogWorkoutPage() {
                       >
                         {isoReached
                           ? `Obiettivo ${isoTargetSeconds}s raggiunto`
-                          : `Obiettivo ${isoTargetSeconds}s totali`}
+                          : isPureIsometry
+                            ? `Record a ${isoTargetSeconds}s di fila`
+                            : `Obiettivo ${isoTargetSeconds}s totali`}
                       </span>
                     </div>
                       <Input
@@ -487,7 +489,11 @@ export default function LogWorkoutPage() {
                           updateDraft(exercise.id, { actualSeconds: event.target.value })
                         }
                         disabled={draft.skipped}
-placeholder={`somma delle tenute, obiettivo ${isoTargetSeconds}s`}
+placeholder={
+                          isPureIsometry
+                            ? "migliore tenuta singola"
+                            : `somma delle tenute, obiettivo ${isoTargetSeconds}s`
+                        }
                       />
                   </div>
                 </div>
