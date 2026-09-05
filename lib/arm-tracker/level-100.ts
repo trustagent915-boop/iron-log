@@ -11,7 +11,8 @@ export type Level100RuleId =
   | "isometric_skill"
   | "dynamic_skill"
   | "conditioning"
-  | "machine_cable";
+  | "machine_cable"
+  | "assisted_progression";
 
 export interface Level100Rule {
   id: Level100RuleId;
@@ -122,6 +123,14 @@ const level100Rules: Record<Level100RuleId, Level100Rule> = {
     description: "Run, double under, Fran e metcon: non sono comparabili con il Livello 100 in kg.",
     needsDedicatedMetric: true
   },
+  assisted_progression: {
+    id: "assisted_progression",
+    label: "Progressioni assistite",
+    formulaLabel: "assistito",
+    description:
+      "Varianti assistite (elastico, negative): l entita dell aiuto non e registrata, quindi non sono confrontabili con la versione pulita.",
+    needsDedicatedMetric: true
+  },
   machine_cable: {
     id: "machine_cable",
     label: "Macchine / cavi",
@@ -217,7 +226,17 @@ export function canonicalizeLevel100ExerciseName(rawName: string) {
     return "One Arm Pull Up Iso";
   }
 
-  if (includesAny(normalized, ["one arm pull up", "oap", "assisted one arm pull up"])) {
+  // Le varianti assistite non sono la stessa cosa della trazione a un braccio
+  // pulita: tenerle nello stesso bucket faceva risultare un livello 90 basato
+  // solo su serie con elastico. Vanno separate.
+  if (
+    includesAny(normalized, ["one arm pull up", "oap", "one arm"]) &&
+    includesAny(normalized, ["assist", "elastic", "band", "negativ"])
+  ) {
+    return "One Arm Pull Up assistito";
+  }
+
+  if (includesAny(normalized, ["one arm pull up", "oap"])) {
     return "One Arm Pull Up";
   }
 
@@ -359,6 +378,13 @@ export function getLevel100ExerciseRule(exerciseName: string): Level100Rule {
 
   if (includesAny(normalized, ["one arm pull up iso", "one arm hold", "oap iso"])) {
     return level100Rules.one_arm_isometry;
+  }
+
+  if (
+    includesAny(normalized, ["one arm pull up", "oap", "one arm"]) &&
+    includesAny(normalized, ["assist", "elastic", "band", "negativ"])
+  ) {
+    return level100Rules.assisted_progression;
   }
 
   if (includesAny(normalized, ["one arm pull up", "oap"])) {

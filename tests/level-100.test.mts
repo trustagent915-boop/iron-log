@@ -491,3 +491,32 @@ test("single-arm dumbbell curls score on the arms scale, not as a two-arm classi
   const hammer = getLevel100Score({ exerciseName: "Hammer Curl", weight: 27.5, reps: 8 });
   assert.ok(hammer > rising, "carico maggiore deve dare livello maggiore");
 });
+
+test("assisted one-arm work is kept apart from the real one-arm pull up", () => {
+  // Tutti i log storici a un braccio erano assistiti (elastico o negative) e
+  // finivano nel bucket "One Arm Pull Up", producendo un livello 90 su una
+  // trazione mai eseguita pulita.
+  assert.equal(canonicalizeLevel100ExerciseName("One Arm Pull Up"), "One Arm Pull Up");
+  assert.equal(
+    canonicalizeLevel100ExerciseName("OAP - assistito (obiettivo 10)"),
+    "One Arm Pull Up assistito"
+  );
+  assert.equal(
+    canonicalizeLevel100ExerciseName("Assisted + Negative One arm Pull Up"),
+    "One Arm Pull Up assistito"
+  );
+  assert.equal(
+    canonicalizeLevel100ExerciseName("One Arm Pull Up con elastico"),
+    "One Arm Pull Up assistito"
+  );
+
+  // La versione pulita conserva la sua regola, l'assistita non e punteggiabile
+  // perche l'entita dell'aiuto non viene registrata.
+  assert.equal(getLevel100ExerciseRule("One Arm Pull Up").id, "one_arm_pull_up");
+  assert.equal(getLevel100ExerciseRule("OAP assistito (elastico)").id, "assisted_progression");
+  assert.equal(getLevel100ExerciseRule("OAP assistito (elastico)").needsDedicatedMetric, true);
+
+  // L'isometria a un braccio resta separata da entrambe.
+  assert.equal(canonicalizeLevel100ExerciseName("One Arm Pull Up Iso"), "One Arm Pull Up Iso");
+  assert.equal(getLevel100ExerciseRule("One Arm Pull Up Iso").id, "one_arm_isometry");
+});
