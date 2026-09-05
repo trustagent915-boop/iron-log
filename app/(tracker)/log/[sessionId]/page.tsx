@@ -301,7 +301,10 @@ export default function LogWorkoutPage() {
           );
           // Obiettivo di tenuta calcolato sulle reps previste: piu il
           // carico e vicino al massimale, piu la tenuta deve essere breve.
-          const isoTargetSeconds = getIsometryTargetSeconds(exercise.plannedReps);
+          const isoTargetSeconds = getIsometryTargetSeconds(
+            exercise.plannedReps,
+            exercise.plannedNotes
+          );
           const isoReached = hasReachedIsometryTarget(
             parseInputNumber(draft.actualSeconds),
             isoTargetSeconds
