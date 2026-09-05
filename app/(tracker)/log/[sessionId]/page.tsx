@@ -289,7 +289,12 @@ export default function LogWorkoutPage() {
             notes: "",
             skipped: false
           };
-          const showSecondsField = isIsometryExerciseName(draft.exerciseName ?? exercise.exerciseName);
+          // Ogni esercizio si chiude con una tenuta isometrica allo stesso peso,
+          // quindi il campo secondi e sempre disponibile: cambia solo la
+          // dicitura per gli esercizi che sono gia isometrie di loro.
+          const isPureIsometry = isIsometryExerciseName(
+            draft.exerciseName ?? exercise.exerciseName
+          );
           const personalRecordLabel = getExercisePersonalRecordLabel(
             data,
             draft.exerciseName || exercise.exerciseName
@@ -387,11 +392,7 @@ export default function LogWorkoutPage() {
                     disabled={draft.skipped}
                   />
                 </div>
-                <div
-                  className={`grid gap-4 ${
-                    showSecondsField ? "md:grid-cols-4" : "md:grid-cols-3"
-                  }`}
-                >
+                <div className="grid gap-4 md:grid-cols-4">
                   <div className="space-y-2">
                     <label
                       htmlFor={`actual-sets-${exercise.id}`}
@@ -446,13 +447,12 @@ export default function LogWorkoutPage() {
                       disabled={draft.skipped}
                     />
                   </div>
-                  {showSecondsField ? (
-                    <div className="space-y-2">
+                                      <div className="space-y-2">
                       <label
                         htmlFor={`actual-seconds-${exercise.id}`}
                         className="text-sm font-medium text-foreground"
                       >
-                        Secondi tenuta
+                        {isPureIsometry ? "Secondi tenuta" : "Isometria finale (s)"}
                       </label>
                       <Input
                         id={`actual-seconds-${exercise.id}`}
@@ -463,10 +463,9 @@ export default function LogWorkoutPage() {
                           updateDraft(exercise.id, { actualSeconds: event.target.value })
                         }
                         disabled={draft.skipped}
-                        placeholder="min 10s per record"
+                        placeholder={isPureIsometry ? "min 10s per record" : "stesso peso, ultima serie"}
                       />
-                    </div>
-                  ) : null}
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <label
