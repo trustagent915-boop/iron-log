@@ -46,7 +46,7 @@ export function ErrorBoundaryWrapper({ error, reset }: ErrorBoundaryWrapperProps
               </Button>
               <Button
                 variant="outline"
-                onClick={() => window.location.href = '/'}
+                onClick={() => window.location.assign(new URL("/", window.location.origin).toString())}
               >
                 Torna alla home
               </Button>

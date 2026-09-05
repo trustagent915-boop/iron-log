@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 // cache. Safari iOS was observed to hold onto multi-hour old HTML
 // referencing chunks from a pre-fix build, which kept surfacing "Cloud
 // bloccato" and no data even after new deployments.
-export function middleware() {
+export function proxy() {
   const response = NextResponse.next();
   response.headers.set(
     "Cache-Control",
