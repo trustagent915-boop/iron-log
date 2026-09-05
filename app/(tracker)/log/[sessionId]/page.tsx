@@ -13,6 +13,10 @@ import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { StatusBadge } from "@/features/arm-tracker/status-badge";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
 import {
+  getIsometryTargetSeconds,
+  hasReachedIsometryTarget
+} from "@/lib/arm-tracker/isometry-target";
+import {
   formatCompactNumber,
   formatCompactWeight,
   formatDateLabel,
@@ -295,6 +299,13 @@ export default function LogWorkoutPage() {
           const isPureIsometry = isIsometryExerciseName(
             draft.exerciseName ?? exercise.exerciseName
           );
+          // Obiettivo di tenuta calcolato sulle reps previste: piu il
+          // carico e vicino al massimale, piu la tenuta deve essere breve.
+          const isoTargetSeconds = getIsometryTargetSeconds(exercise.plannedReps);
+          const isoReached = hasReachedIsometryTarget(
+            parseInputNumber(draft.actualSeconds),
+            isoTargetSeconds
+          );
           const personalRecordLabel = getExercisePersonalRecordLabel(
             data,
             draft.exerciseName || exercise.exerciseName
@@ -333,6 +344,9 @@ export default function LogWorkoutPage() {
                         updateDraft(exercise.id, { actualWeight: String(exercise.plannedWeight) })
                       }
                     />
+                    <span className="rounded-full bg-secondary px-3 py-1 text-secondary-foreground">
+                      Iso obiettivo: {isoTargetSeconds}s
+                    </span>
                   </div>
                   {(exercise.plannedSets !== null ||
                     exercise.plannedReps !== null ||
@@ -448,12 +462,23 @@ export default function LogWorkoutPage() {
                     />
                   </div>
                                       <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
                       <label
                         htmlFor={`actual-seconds-${exercise.id}`}
                         className="text-sm font-medium text-foreground"
                       >
                         {isPureIsometry ? "Secondi tenuta" : "Isometria finale (s)"}
                       </label>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          isoReached
+                            ? "bg-success/15 text-success"
+                            : "bg-secondary text-muted-foreground"
+                        }`}
+                      >
+                        {isoReached ? `Obiettivo ${isoTargetSeconds}s raggiunto` : `Obiettivo ${isoTargetSeconds}s`}
+                      </span>
+                    </div>
                       <Input
                         id={`actual-seconds-${exercise.id}`}
                         name={`actual-seconds-${exercise.id}`}
@@ -463,7 +488,7 @@ export default function LogWorkoutPage() {
                           updateDraft(exercise.id, { actualSeconds: event.target.value })
                         }
                         disabled={draft.skipped}
-                        placeholder={isPureIsometry ? "min 10s per record" : "stesso peso, ultima serie"}
+                        placeholder={`${isoTargetSeconds}s allo stesso peso`}
                       />
                   </div>
                 </div>
