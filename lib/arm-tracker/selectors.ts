@@ -901,7 +901,10 @@ export function groupSessionsByWeek(sessions: SessionWithExercises[]) {
 
   sessions.forEach((session) => {
     const key = session.weekNumber !== null ? `week-${session.weekNumber}` : "week-null";
-    const title = session.weekNumber !== null ? `Settimana ${session.weekNumber}` : "Sessioni senza settimana";
+    // Il blocco e organizzato in cicli da 10 giorni (4 sedute di forza + 2 di
+    // braccio di ferro), non in settimane di calendario.
+    const title =
+      session.weekNumber !== null ? `Ciclo ${session.weekNumber}` : "Sessioni fuori ciclo";
     const existingGroup = groups.get(key);
 
     if (existingGroup) {
