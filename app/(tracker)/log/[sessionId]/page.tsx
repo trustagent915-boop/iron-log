@@ -13,6 +13,7 @@ import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { StatusBadge } from "@/features/arm-tracker/status-badge";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
 import {
+  getIsometryHoldCount,
   getIsometryTargetSeconds,
   hasReachedIsometryTarget
 } from "@/lib/arm-tracker/isometry-target";
@@ -305,6 +306,7 @@ export default function LogWorkoutPage() {
             exercise.plannedReps,
             exercise.plannedNotes
           );
+          const isoHoldCount = getIsometryHoldCount(exercise.plannedSets);
           const isoReached = hasReachedIsometryTarget(
             parseInputNumber(draft.actualSeconds),
             isoTargetSeconds
@@ -348,7 +350,8 @@ export default function LogWorkoutPage() {
                       }
                     />
                     <span className="rounded-full bg-secondary px-3 py-1 text-secondary-foreground">
-                      Iso obiettivo: {isoTargetSeconds}s
+                      Iso obiettivo: {isoHoldCount > 1 ? `${isoHoldCount} x ` : ""}
+                      {isoTargetSeconds}s
                     </span>
                   </div>
                   {(exercise.plannedSets !== null ||
@@ -479,7 +482,9 @@ export default function LogWorkoutPage() {
                             : "bg-secondary text-muted-foreground"
                         }`}
                       >
-                        {isoReached ? `Obiettivo ${isoTargetSeconds}s raggiunto` : `Obiettivo ${isoTargetSeconds}s`}
+                        {isoReached
+                          ? `Obiettivo ${isoTargetSeconds}s raggiunto`
+                          : `Obiettivo ${isoHoldCount > 1 ? `${isoHoldCount} x ` : ""}${isoTargetSeconds}s`}
                       </span>
                     </div>
                       <Input
@@ -491,7 +496,11 @@ export default function LogWorkoutPage() {
                           updateDraft(exercise.id, { actualSeconds: event.target.value })
                         }
                         disabled={draft.skipped}
-                        placeholder={`${isoTargetSeconds}s allo stesso peso`}
+                        placeholder={
+                          isoHoldCount > 1
+                            ? `${isoHoldCount} tenute da ${isoTargetSeconds}s, ultime serie`
+                            : `${isoTargetSeconds}s allo stesso peso`
+                        }
                       />
                   </div>
                 </div>
