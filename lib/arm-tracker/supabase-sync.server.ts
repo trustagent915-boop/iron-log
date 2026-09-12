@@ -1,4 +1,9 @@
-import { createEmptyArmTrackerData, mergeArmTrackerSnapshots } from "@/lib/arm-tracker/storage";
+import {
+  createEmptyArmTrackerData,
+  mergeArmTrackerSnapshots,
+  normalizeArmTrackerSnapshot,
+  stableSerializeArmTrackerData
+} from "@/lib/arm-tracker/storage";
 import type { ArmTrackerData } from "@/lib/arm-tracker/types";
 import { selectVersionIdsToDelete } from "@/lib/arm-tracker/version-retention";
 
@@ -216,8 +221,24 @@ export async function writeSupabaseSnapshot(input: {
   const currentSnapshot = existingSnapshot.snapshot ?? createEmptyArmTrackerData();
   const mergedSnapshot = mergeSnapshotsForZeroLoss(currentSnapshot, incomingSnapshot);
 
-  // Si archivia solo lo stato del cloud PRIMA della scrittura: e' l'unico
-  // utile per un rollback. La copia "incoming" duplicava dati gia' presenti
+  // Se il merge non cambia nulla rispetto al cloud, non c e niente da scrivere:
+  // niente versione, niente upsert. Il client ripubblica spesso lo stesso
+  // stato (al mount, dopo un retry) e ogni giro costava tre trasferimenti da
+  // 3 MB verso Supabase.
+  if (
+    stableSerializeArmTrackerData(mergedSnapshot) ===
+    stableSerializeArmTrackerData(normalizeArmTrackerSnapshot(currentSnapshot))
+  ) {
+    return {
+      configured: true,
+      snapshot: mergedSnapshot,
+      seedVersion: existingSnapshot.seedVersion ?? input.seedVersion,
+      updatedAt: existingSnapshot.updatedAt
+    };
+  }
+
+  // Si archivia solo lo stato del cloud PRIMA della scrittura: e l unico
+  // utile per un rollback. La copia "incoming" duplicava dati gia presenti
   // nella tabella principale e raddoppiava la crescita della tabella.
   await insertSnapshotVersion(config, {
     snapshot: currentSnapshot,
@@ -233,7 +254,9 @@ export async function writeSupabaseSnapshot(input: {
       headers: {
         ...createHeaders(config.serviceRoleKey),
         "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates,return=representation"
+        // return=minimal: la risposta non rimanda indietro i 3 MB appena
+        // scritti. Il risultato lo abbiamo gia in memoria.
+        Prefer: "resolution=merge-duplicates,return=minimal"
       },
       body: JSON.stringify([
         {
@@ -250,6 +273,10 @@ export async function writeSupabaseSnapshot(input: {
     throw new Error(`Supabase write failed (${response.status}).`);
   }
 
-  const rows = (await response.json()) as SnapshotRow[];
-  return toSnapshotResult(rows[0] ?? null);
+  return {
+    configured: true,
+    snapshot: mergedSnapshot,
+    seedVersion: input.seedVersion,
+    updatedAt: new Date().toISOString()
+  };
 }

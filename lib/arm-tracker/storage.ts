@@ -733,6 +733,35 @@ function mergeSnapshots(current: ArmTrackerData, incoming: ArmTrackerData) {
 
 export const mergeArmTrackerSnapshots = mergeSnapshots;
 
+/** Normalizza uno snapshot grezzo (cloud o archivio) nella forma corrente. */
+export function normalizeArmTrackerSnapshot(raw: Partial<ArmTrackerData> | null | undefined): ArmTrackerData {
+  return normalizeSnapshot(raw);
+}
+
+function sortKeysDeep(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(sortKeysDeep);
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.keys(value as Record<string, unknown>)
+        .sort()
+        .map((key) => [key, sortKeysDeep((value as Record<string, unknown>)[key])])
+    );
+  }
+  return value;
+}
+
+/**
+ * Serializzazione indipendente dall ordine delle chiavi. Serve per capire se
+ * due snapshot sono DAVVERO diversi: Postgres (jsonb) riordina le chiavi, per
+ * cui un confronto con JSON.stringify diretto era sempre "diverso" e l app
+ * riscriveva 3 MB sul cloud a ogni apertura di pagina.
+ */
+export function stableSerializeArmTrackerData(snapshot: ArmTrackerData): string {
+  return JSON.stringify(sortKeysDeep(snapshot));
+}
+
 export function createEmptyArmTrackerData(): ArmTrackerData {
   return {
     plans: [],

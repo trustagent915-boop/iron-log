@@ -30,7 +30,9 @@ import {
   createEmptyArmTrackerData,
   db,
   exportArmTrackerArchive,
-  mergeArmTrackerSnapshots
+  mergeArmTrackerSnapshots,
+  normalizeArmTrackerSnapshot,
+  stableSerializeArmTrackerData
 } from "@/lib/arm-tracker/storage";
 import type {
   DashboardConfig,
@@ -146,7 +148,13 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
 
           applySnapshot(merged);
 
-          if (JSON.stringify(merged) !== JSON.stringify(cloudSnapshot)) {
+          // Confronto a chiavi ordinate contro il cloud normalizzato: jsonb
+          // riordina le chiavi e un JSON.stringify diretto risultava sempre
+          // diverso, con una riscrittura da 3 MB a ogni apertura di pagina.
+          if (
+            stableSerializeArmTrackerData(merged) !==
+            stableSerializeArmTrackerData(normalizeArmTrackerSnapshot(cloudSnapshot))
+          ) {
             void pushSnapshotBestEffort(merged, seedVersionRef.current);
           }
           setIsReady(true);
