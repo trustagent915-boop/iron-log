@@ -1,3 +1,6 @@
+import { normalizeDashboardConfig } from "@/lib/arm-tracker/dashboard-config";
+import { normalizeIsometryKey } from "@/lib/arm-tracker/isometry-target";
+import type { DashboardConfig, IsometryTargetConfig } from "@/lib/arm-tracker/types";
 import { addDays, format, startOfToday } from "date-fns";
 
 import { skippedNoteToken } from "@/lib/arm-tracker/selectors";
@@ -42,7 +45,8 @@ function hasExerciseInput(exerciseLog: WorkoutExerciseLog) {
     exerciseLog.actualSets !== null ||
     exerciseLog.actualReps !== null ||
     exerciseLog.actualWeight !== null ||
-    exerciseLog.actualSeconds !== null
+    exerciseLog.actualSeconds !== null ||
+    (exerciseLog.actualHoldTotalSeconds ?? null) !== null
   );
 }
 
@@ -276,6 +280,7 @@ export function logArmwrestlingSessionMutation(input: LogArmwrestlingSessionInpu
     actualSets: null,
     // La durata viene salvata in secondi così resta un dato numerico reale
     actualSeconds: duration ? duration * 60 : null,
+    actualHoldTotalSeconds: null,
     notes,
     performedOrder: 0
   };
@@ -377,6 +382,7 @@ export function saveWorkoutLogEntry(input: SaveWorkoutLogInput) {
     const actualReps = skipped ? null : submittedExercise?.actualReps ?? null;
     const actualWeight = skipped ? null : submittedExercise?.actualWeight ?? null;
     const actualSeconds = skipped ? null : submittedExercise?.actualSeconds ?? null;
+    const actualHoldTotalSeconds = skipped ? null : submittedExercise?.actualHoldTotalSeconds ?? null;
     const explicitSets = skipped ? null : submittedExercise?.actualSets ?? null;
     const actualSets = skipped || (explicitSets === null && actualReps === null && actualWeight === null) ? explicitSets : explicitSets ?? planExercise.plannedSets ?? null;
 
@@ -393,6 +399,7 @@ export function saveWorkoutLogEntry(input: SaveWorkoutLogInput) {
       actualReps,
       actualSets,
       actualSeconds,
+      actualHoldTotalSeconds,
       notes: skipped ? `${skippedNoteToken} ${trimmedNotes ?? ""}`.trim() : trimmedNotes,
       performedOrder: index
     };
@@ -424,4 +431,52 @@ export function saveWorkoutLogEntry(input: SaveWorkoutLogInput) {
   });
 
   return { workoutLog, exerciseLogs: workoutLogExerciseEntries, completionStatus };
+}
+
+/**
+ * Aggiorna la configurazione della Dashboard (principali, nascosti, ordine).
+ * L update riceve la config corrente e ne restituisce una nuova.
+ */
+export function updateDashboardConfigMutation(update: (config: DashboardConfig) => DashboardConfig) {
+  const snapshot = db.getSnapshot();
+  const dashboardConfig = {
+    ...normalizeDashboardConfig(update(snapshot.dashboardConfig)),
+    updatedAt: new Date().toISOString()
+  };
+  db.setSnapshot({ ...snapshot, dashboardConfig });
+  return dashboardConfig;
+}
+
+export function setIsometryTargetMutation(
+  exerciseName: string,
+  input: { volumeTargetSeconds: number; recordTargetSeconds?: number | null }
+): IsometryTargetConfig {
+  const volume = Number(input.volumeTargetSeconds);
+
+  if (!Number.isFinite(volume) || volume <= 0) {
+    throw new Error("Target non valido: servono secondi maggiori di zero.");
+  }
+
+  const record =
+    input.recordTargetSeconds === undefined || input.recordTargetSeconds === null
+      ? null
+      : Number(input.recordTargetSeconds);
+  const snapshot = db.getSnapshot();
+  const key = normalizeIsometryKey(exerciseName);
+  const config: IsometryTargetConfig = {
+    volumeTargetSeconds: Math.round(volume),
+    recordTargetSeconds: record !== null && Number.isFinite(record) && record > 0 ? Math.round(record) : null,
+    updatedAt: new Date().toISOString()
+  };
+
+  db.setSnapshot({ ...snapshot, isometryTargets: { ...snapshot.isometryTargets, [key]: config } });
+  return config;
+}
+
+export function resetIsometryTargetMutation(exerciseName: string) {
+  const snapshot = db.getSnapshot();
+  const key = normalizeIsometryKey(exerciseName);
+  const isometryTargets = { ...snapshot.isometryTargets };
+  delete isometryTargets[key];
+  db.setSnapshot({ ...snapshot, isometryTargets });
 }

@@ -12,6 +12,9 @@ import {
 
 import {
   addWatchlistExerciseMutation,
+  resetIsometryTargetMutation,
+  setIsometryTargetMutation,
+  updateDashboardConfigMutation,
   createCustomSession,
   deleteWorkoutLogMutation,
   importParsedPlan,
@@ -30,6 +33,8 @@ import {
   mergeArmTrackerSnapshots
 } from "@/lib/arm-tracker/storage";
 import type {
+  DashboardConfig,
+  IsometryTargetConfig,
   ArmTrackerData,
   ArmTrackerArchiveExport,
   ArmTrackerArchiveImportResult,
@@ -71,6 +76,12 @@ interface ArmTrackerContextValue {
   findSessionDetails: (sessionId: string) => SessionDetails | null;
   addWatchlistExercise: (exerciseName: string) => Promise<void>;
   removeWatchlistExercise: (exerciseName: string) => Promise<void>;
+  updateDashboardConfig: (update: (config: DashboardConfig) => DashboardConfig) => Promise<DashboardConfig>;
+  setIsometryTarget: (
+    exerciseName: string,
+    input: { volumeTargetSeconds: number; recordTargetSeconds?: number | null }
+  ) => Promise<IsometryTargetConfig>;
+  resetIsometryTarget: (exerciseName: string) => Promise<void>;
   deleteWorkoutLog: (workoutLogId: string) => Promise<void>;
   logArmwrestlingSession: (
     input: LogArmwrestlingSessionInput
@@ -206,6 +217,21 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
     await commitMutation(() => removeWatchlistExerciseMutation(exerciseName));
   }
 
+  async function updateDashboardConfig(update: (config: DashboardConfig) => DashboardConfig) {
+    return commitMutation(() => updateDashboardConfigMutation(update));
+  }
+
+  async function setIsometryTarget(
+    exerciseName: string,
+    input: { volumeTargetSeconds: number; recordTargetSeconds?: number | null }
+  ) {
+    return commitMutation(() => setIsometryTargetMutation(exerciseName, input));
+  }
+
+  async function resetIsometryTarget(exerciseName: string) {
+    await commitMutation(() => resetIsometryTargetMutation(exerciseName));
+  }
+
   async function deleteWorkoutLog(workoutLogId: string) {
     await commitMutation(() => deleteWorkoutLogMutation(workoutLogId));
   }
@@ -253,6 +279,9 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
         findSessionDetails,
         addWatchlistExercise,
         removeWatchlistExercise,
+        updateDashboardConfig,
+        setIsometryTarget,
+        resetIsometryTarget,
         deleteWorkoutLog,
         logArmwrestlingSession
       }}

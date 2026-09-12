@@ -55,7 +55,10 @@ export interface WorkoutExerciseLog {
   actualWeight: number | null;
   actualReps: number | null;
   actualSets: number | null;
+  /** Record isometrico della seduta: la MIGLIORE tenuta singola, in secondi. */
   actualSeconds: number | null;
+  /** Volume isometrico della seduta: SOMMA di tutte le tenute, in secondi. */
+  actualHoldTotalSeconds: number | null;
   notes: string | null;
   performedOrder: number;
 }
@@ -121,6 +124,33 @@ export interface ArmTrackerDeletedIds {
   importRuns: string[];
 }
 
+/**
+ * Target isometrico per esercizio. I valori iniziali sono provvisori: l app e
+ * in fase di raccolta dati e i target vanno rivisti quando si capisce quanto
+ * lavoro produce davvero progressi.
+ */
+export interface IsometryTargetConfig {
+  /** Secondi di tenuta da accumulare in una seduta per considerare l esercizio allenato. */
+  volumeTargetSeconds: number;
+  /** Obiettivo di miglior tenuta singola; null se per l esercizio non ha senso. */
+  recordTargetSeconds: number | null;
+  updatedAt: string;
+}
+
+/**
+ * Configurazione personale della Dashboard. Gli esercizi del programma attivo
+ * entrano da soli; qui si tiene solo cio che l utente decide in piu:
+ * i principali (sempre visibili), i nascosti, e l ordine.
+ * Nascondere un esercizio non tocca mai lo storico.
+ */
+export interface DashboardConfig {
+  pinned: string[];
+  hidden: string[];
+  order: string[];
+  /** Ultima modifica (ISO): nel merge tra dispositivi vince la piu recente. */
+  updatedAt: string;
+}
+
 export interface ArmTrackerData {
   plans: Plan[];
   sessions: PlanSession[];
@@ -128,7 +158,10 @@ export interface ArmTrackerData {
   workoutLogs: WorkoutLog[];
   exerciseLogs: WorkoutExerciseLog[];
   importRuns: ImportRun[];
+  /** @deprecated sostituita da dashboardConfig; resta popolata solo per compatibilita con le vecchie versioni. */
   level100Watchlist: string[];
+  isometryTargets: Record<string, IsometryTargetConfig>;
+  dashboardConfig: DashboardConfig;
   deletedIds: ArmTrackerDeletedIds;
 }
 
@@ -222,6 +255,7 @@ export interface WorkoutExerciseInput {
   actualReps: number | null;
   actualSets: number | null;
   actualSeconds: number | null;
+  actualHoldTotalSeconds: number | null;
   notes: string | null;
   skipped: boolean;
 }
