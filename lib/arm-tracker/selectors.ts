@@ -872,6 +872,8 @@ export function filterDataByYear(data: ArmTrackerData, year: number | "all") {
     exerciseLogs,
     importRuns,
     level100Watchlist: data.level100Watchlist,
+    isometryTargets: data.isometryTargets,
+    dashboardConfig: data.dashboardConfig,
     deletedIds: data.deletedIds
   };
 }

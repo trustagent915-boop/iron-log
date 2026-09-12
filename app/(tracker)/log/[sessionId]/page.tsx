@@ -13,8 +13,9 @@ import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { StatusBadge } from "@/features/arm-tracker/status-badge";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
 import {
-  getIsometryTargetSeconds,
-  hasReachedIsometryTarget
+  getIsometryCompletion,
+  isometryStatusLabels,
+  resolveIsometryTarget
 } from "@/lib/arm-tracker/isometry-target";
 import {
   formatCompactNumber,
@@ -32,6 +33,7 @@ interface ExerciseDraft {
   actualReps: string;
   actualWeight: string;
   actualSeconds: string;
+  actualHoldTotalSeconds: string;
   notes: string;
   skipped: boolean;
 }
@@ -132,6 +134,7 @@ export default function LogWorkoutPage() {
           actualReps: toFieldValue(existingExerciseLog?.actualReps ?? null),
           actualWeight: toFieldValue(existingExerciseLog?.actualWeight ?? null),
           actualSeconds: toFieldValue(existingExerciseLog?.actualSeconds ?? null),
+          actualHoldTotalSeconds: toFieldValue(existingExerciseLog?.actualHoldTotalSeconds ?? null),
           notes: stripSkippedToken(existingExerciseLog?.notes ?? null) ?? "",
           skipped: existingExerciseLog ? isSkippedExerciseLog(existingExerciseLog) : false
         };
@@ -191,6 +194,7 @@ export default function LogWorkoutPage() {
             actualReps: parseInputNumber(draft?.actualReps ?? ""),
             actualWeight: parseInputNumber(draft?.actualWeight ?? ""),
             actualSeconds: parseInputNumber(draft?.actualSeconds ?? ""),
+            actualHoldTotalSeconds: parseInputNumber(draft?.actualHoldTotalSeconds ?? ""),
             notes: draft?.notes ?? "",
             skipped: draft?.skipped ?? false
           };
@@ -290,6 +294,7 @@ export default function LogWorkoutPage() {
             actualReps: "",
             actualWeight: "",
             actualSeconds: "",
+            actualHoldTotalSeconds: "",
             notes: "",
             skipped: false
           };
@@ -299,10 +304,21 @@ export default function LogWorkoutPage() {
           const isPureIsometry = isIsometryExerciseName(
             draft.exerciseName ?? exercise.exerciseName
           );
-          // Obiettivo unico: 10 secondi di tenuta TOTALI a fine esercizio,
-          // comunque tu li spezzi.
-          const isoTargetSeconds = getIsometryTargetSeconds();
-          const isoReached = hasReachedIsometryTarget(parseInputNumber(draft.actualSeconds));
+          // Record = migliore tenuta singola; Volume = somma delle tenute.
+          // Il target di volume e per esercizio e modificabile dalla Dashboard.
+          const isoTarget = resolveIsometryTarget(
+            data.isometryTargets,
+            draft.exerciseName || exercise.exerciseName
+          );
+          const isoCompletion = getIsometryCompletion(
+            parseInputNumber(draft.actualHoldTotalSeconds),
+            isoTarget.volumeTargetSeconds
+          );
+          const isoRecordSeconds = parseInputNumber(draft.actualSeconds);
+          const isoRecordReached =
+            isoTarget.recordTargetSeconds !== null &&
+            isoRecordSeconds !== null &&
+            isoRecordSeconds >= isoTarget.recordTargetSeconds;
           const personalRecordLabel = getExercisePersonalRecordLabel(
             data,
             draft.exerciseName || exercise.exerciseName
@@ -342,7 +358,7 @@ export default function LogWorkoutPage() {
                       }
                     />
                     <span className="rounded-full bg-secondary px-3 py-1 text-secondary-foreground">
-                      {isPureIsometry ? `Record: ${isoTargetSeconds}s di fila` : `Iso: ${isoTargetSeconds}s totali`}
+                      Target iso: {isoTarget.volumeTargetSeconds}s
                     </span>
                   </div>
                   {(exercise.plannedSets !== null ||
@@ -403,7 +419,7 @@ export default function LogWorkoutPage() {
                     disabled={draft.skipped}
                   />
                 </div>
-                <div className="grid gap-4 md:grid-cols-4">
+                <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
                   <div className="space-y-2">
                     <label
                       htmlFor={`actual-sets-${exercise.id}`}
@@ -460,26 +476,24 @@ export default function LogWorkoutPage() {
                   </div>
                                       <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
-                      <label
-                        htmlFor={`actual-seconds-${exercise.id}`}
-                        className="text-sm font-medium text-foreground"
-                      >
-                        {isPureIsometry ? "Secondi tenuta" : "Isometria finale (s tot)"}
-                      </label>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                          isoReached
-                            ? "bg-success/15 text-success"
-                            : "bg-secondary text-muted-foreground"
-                        }`}
-                      >
-                        {isoReached
-                          ? `Obiettivo ${isoTargetSeconds}s raggiunto`
-                          : isPureIsometry
-                            ? `Record a ${isoTargetSeconds}s di fila`
-                            : `Obiettivo ${isoTargetSeconds}s totali`}
-                      </span>
-                    </div>
+                        <label
+                          htmlFor={`actual-seconds-${exercise.id}`}
+                          className="text-sm font-medium text-foreground"
+                        >
+                          {isPureIsometry ? "Record tenuta (s)" : "Record iso (s)"}
+                        </label>
+                        {isoTarget.recordTargetSeconds !== null ? (
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                              isoRecordReached ? "bg-success/15 text-success" : "bg-secondary text-muted-foreground"
+                            }`}
+                          >
+                            {isoRecordReached
+                              ? `Record ${isoTarget.recordTargetSeconds}s raggiunto`
+                              : `Record a ${isoTarget.recordTargetSeconds}s di fila`}
+                          </span>
+                        ) : null}
+                      </div>
                       <Input
                         id={`actual-seconds-${exercise.id}`}
                         name={`actual-seconds-${exercise.id}`}
@@ -489,11 +503,41 @@ export default function LogWorkoutPage() {
                           updateDraft(exercise.id, { actualSeconds: event.target.value })
                         }
                         disabled={draft.skipped}
-placeholder={
-                          isPureIsometry
-                            ? "migliore tenuta singola"
-                            : `somma delle tenute, obiettivo ${isoTargetSeconds}s`
+                        placeholder="migliore tenuta singola"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <label
+                          htmlFor={`actual-hold-total-${exercise.id}`}
+                          className="text-sm font-medium text-foreground"
+                        >
+                          Volume iso (s)
+                        </label>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                            isoCompletion.status === "raggiunto" || isoCompletion.status === "superato"
+                              ? "bg-success/15 text-success"
+                              : isoCompletion.status === "vicino"
+                                ? "bg-primary/15 text-primary"
+                                : "bg-secondary text-muted-foreground"
+                          }`}
+                        >
+                          {isoCompletion.status === "nessun-dato"
+                            ? `Target ${isoTarget.volumeTargetSeconds}s`
+                            : `${isoCompletion.percent}% · ${isometryStatusLabels[isoCompletion.status]}`}
+                        </span>
+                      </div>
+                      <Input
+                        id={`actual-hold-total-${exercise.id}`}
+                        name={`actual-hold-total-${exercise.id}`}
+                        inputMode="decimal"
+                        value={draft.actualHoldTotalSeconds}
+                        onChange={(event) =>
+                          updateDraft(exercise.id, { actualHoldTotalSeconds: event.target.value })
                         }
+                        disabled={draft.skipped}
+                        placeholder={`somma delle tenute, target ${isoTarget.volumeTargetSeconds}s`}
                       />
                   </div>
                 </div>

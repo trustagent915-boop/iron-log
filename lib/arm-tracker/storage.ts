@@ -1,4 +1,6 @@
 import type {
+  DashboardConfig,
+  IsometryTargetConfig,
   ArmTrackerArchive,
   ArmTrackerArchiveExport,
   ArmTrackerArchiveImportResult,
@@ -242,10 +244,115 @@ function normalizeExerciseLog(
     actualWeight: asNullableNumber(raw.actualWeight),
     actualReps: asNullableNumber(raw.actualReps),
     actualSets: asNullableNumber(raw.actualSets),
-    actualSeconds: asNullableNumber(raw.actualSeconds),
+    ...splitLegacyIsometrySeconds(raw, asString(raw.exerciseNameSnapshot, plannedExercise?.exerciseName ?? "")),
     notes: asNullableString(raw.notes),
     performedOrder: asNumber(raw.performedOrder)
   };
+}
+
+/**
+ * Record (miglior tenuta singola) e volume (somma delle tenute) sono due
+ * campi distinti. I log salvati prima della separazione avevano un solo
+ * campo con due semantiche: sugli esercizi normali era il TOTALE, sulle
+ * isometrie pure era la tenuta singola. La migrazione e idempotente: scatta
+ * solo se il campo nuovo manca del tutto nel dato grezzo. I marcatori di
+ * seduta (sessione di braccio di ferro, dove i secondi sono la durata
+ * dell allenamento) restano come sono.
+ */
+function splitLegacyIsometrySeconds(
+  raw: Record<string, unknown>,
+  exerciseName: string
+): { actualSeconds: number | null; actualHoldTotalSeconds: number | null } {
+  const actualSeconds = asNullableNumber(raw.actualSeconds);
+
+  if ("actualHoldTotalSeconds" in raw) {
+    return { actualSeconds, actualHoldTotalSeconds: asNullableNumber(raw.actualHoldTotalSeconds) };
+  }
+
+  if (actualSeconds === null || /allenamento\s+braccio\s+di\s+ferro/i.test(exerciseName)) {
+    return { actualSeconds, actualHoldTotalSeconds: null };
+  }
+
+  const pureIsometry = /\biso\b|hold|tenuta|front lever|back lever|planche|l[- ]sit|handstand/.test(
+    exerciseName.toLowerCase()
+  );
+
+  return pureIsometry
+    ? { actualSeconds, actualHoldTotalSeconds: actualSeconds }
+    : { actualSeconds: null, actualHoldTotalSeconds: actualSeconds };
+}
+
+function normalizeIsometryTargets(raw: unknown): Record<string, IsometryTargetConfig> {
+  if (!isRecord(raw)) {
+    return {};
+  }
+
+  const result: Record<string, IsometryTargetConfig> = {};
+
+  for (const [key, value] of Object.entries(raw)) {
+    if (!isRecord(value)) continue;
+    const volume = asNullableNumber(value.volumeTargetSeconds);
+    if (volume === null || volume <= 0) continue;
+    const record = asNullableNumber(value.recordTargetSeconds);
+    result[key.toLowerCase().trim()] = {
+      volumeTargetSeconds: volume,
+      recordTargetSeconds: record !== null && record > 0 ? record : null,
+      updatedAt: asString(value.updatedAt, new Date(0).toISOString())
+    };
+  }
+
+  return result;
+}
+
+function nameKey(name: string) {
+  return name
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Copia minima della logica di lib/arm-tracker/dashboard-config.ts: questo
+// modulo e coperto dai test col runner node, che non risolve gli alias, quindi
+// non puo importare valori da altri moduli dell app.
+function normalizeDashboardConfigRaw(raw: unknown): DashboardConfig | null {
+  if (!isRecord(raw)) {
+    return null;
+  }
+
+  const pinned = normalizeStringArray(raw.pinned);
+  const pinnedKeys = new Set(pinned.map(nameKey));
+  const hidden = normalizeStringArray(raw.hidden).filter((name) => !pinnedKeys.has(nameKey(name)));
+  const order = normalizeStringArray(raw.order);
+  const updatedAt = typeof raw.updatedAt === "string" && raw.updatedAt ? raw.updatedAt : "1970-01-01T00:00:00.000Z";
+
+  return { pinned, hidden, order, updatedAt };
+}
+
+/**
+ * Migrazione dalla vecchia watchlist, una volta sola: cio che era in
+ * watchlist ma non nel programma attivo diventa "principale"; il resto
+ * entra comunque dal programma.
+ */
+function migrateWatchlist(
+  watchlist: string[],
+  plans: Plan[],
+  sessions: PlanSession[],
+  exercises: PlanExercise[]
+): DashboardConfig {
+  const activePlan = plans.find((plan) => plan.status === "active");
+  const sessionIds = new Set(
+    sessions.filter((session) => session.planId === activePlan?.id).map((session) => session.id)
+  );
+  const programKeys = new Set(
+    exercises
+      .filter((exercise) => sessionIds.has(exercise.sessionId))
+      .map((exercise) => nameKey(exercise.exerciseName))
+  );
+  const pinned = watchlist.filter((name) => !programKeys.has(nameKey(name)));
+
+  return { pinned, hidden: [], order: [...pinned], updatedAt: "1970-01-01T00:00:00.000Z" };
 }
 
 function normalizeStringArray(raw: unknown): string[] {
@@ -377,6 +484,20 @@ function normalizeSnapshot(rawSnapshot: Partial<ArmTrackerData> | null | undefin
     deletedIds.exerciseLogs
   );
   const level100Watchlist = normalizeStringArray(rawSnapshot?.level100Watchlist);
+  const isometryTargets = normalizeIsometryTargets(rawSnapshot?.isometryTargets);
+  // Una config esplicita ma vuota e mai toccata (updatedAt epoch) e il
+  // residuo di un merge andato male, non una scelta dell utente: se c e una
+  // watchlist da cui partire, la migrazione va rifatta. Una config svuotata
+  // apposta porta un updatedAt reale e resta vuota.
+  const explicitConfig = normalizeDashboardConfigRaw(rawSnapshot?.dashboardConfig);
+  const untouchedAndEmpty =
+    explicitConfig !== null &&
+    explicitConfig.updatedAt === "1970-01-01T00:00:00.000Z" &&
+    explicitConfig.pinned.length + explicitConfig.hidden.length + explicitConfig.order.length === 0;
+  const dashboardConfig =
+    explicitConfig === null || (untouchedAndEmpty && level100Watchlist.length > 0)
+      ? migrateWatchlist(level100Watchlist, plans, sessions, exercises)
+      : explicitConfig;
 
   return {
     plans: normalizeActivePlanStatuses(plans),
@@ -386,6 +507,8 @@ function normalizeSnapshot(rawSnapshot: Partial<ArmTrackerData> | null | undefin
     exerciseLogs,
     importRuns,
     level100Watchlist,
+    isometryTargets,
+    dashboardConfig,
     deletedIds
   };
 }
@@ -570,6 +693,29 @@ function mergeSnapshots(current: ArmTrackerData, incoming: ArmTrackerData) {
     normalizedIncoming.level100Watchlist.length > 0
       ? normalizedIncoming.level100Watchlist
       : normalizedCurrent.level100Watchlist;
+  // Configurazioni: per chiave vince la piu recente (updatedAt). La Dashboard
+  // e una sola per utente: se il payload in arrivo la porta, e quella valida.
+  const isometryTargets = { ...normalizedCurrent.isometryTargets };
+  for (const [key, config] of Object.entries(normalizedIncoming.isometryTargets)) {
+    const existing = isometryTargets[key];
+    if (!existing || existing.updatedAt <= config.updatedAt) {
+      isometryTargets[key] = config;
+    }
+  }
+  // Vince la config piu recente; a parita di data vince quella con contenuto,
+  // cosi un client appena avviato (config vuota) non cancella mai quella vera.
+  const hasContent = (config: DashboardConfig) =>
+    config.pinned.length + config.hidden.length + config.order.length > 0;
+  const currentConfig = normalizedCurrent.dashboardConfig;
+  const incomingConfig = normalizedIncoming.dashboardConfig;
+  const dashboardConfig =
+    currentConfig.updatedAt !== incomingConfig.updatedAt
+      ? currentConfig.updatedAt > incomingConfig.updatedAt
+        ? currentConfig
+        : incomingConfig
+      : hasContent(incomingConfig) || !hasContent(currentConfig)
+        ? incomingConfig
+        : currentConfig;
 
   return normalizeSnapshot({
     plans: mergeById(normalizedCurrent.plans, normalizedIncoming.plans),
@@ -579,6 +725,8 @@ function mergeSnapshots(current: ArmTrackerData, incoming: ArmTrackerData) {
     exerciseLogs: mergeById(normalizedCurrent.exerciseLogs, normalizedIncoming.exerciseLogs),
     importRuns: mergeById(normalizedCurrent.importRuns, normalizedIncoming.importRuns),
     level100Watchlist,
+    isometryTargets,
+    dashboardConfig,
     deletedIds
   });
 }
@@ -594,6 +742,8 @@ export function createEmptyArmTrackerData(): ArmTrackerData {
     exerciseLogs: [],
     importRuns: [],
     level100Watchlist: [],
+    isometryTargets: {},
+    dashboardConfig: { pinned: [], hidden: [], order: [], updatedAt: "1970-01-01T00:00:00.000Z" },
     deletedIds: {
       plans: [],
       sessions: [],
