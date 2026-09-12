@@ -5,6 +5,9 @@ import { isAuthorizedSnapshotRequest } from "@/lib/arm-tracker/snapshot-auth.ser
 import { createEmptyArmTrackerData, getDataCounts } from "@/lib/arm-tracker/storage";
 
 export const dynamic = "force-dynamic";
+// Le scritture spostano ~3 MB da e verso Supabase: il limite di default
+// della funzione le troncava al primo tentativo.
+export const maxDuration = 60;
 
 function cleanEnvValue(value: string | undefined) {
   return value

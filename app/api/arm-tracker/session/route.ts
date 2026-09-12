@@ -7,6 +7,9 @@ import {
 } from "@/lib/arm-tracker/snapshot-auth.server";
 
 export const dynamic = "force-dynamic";
+// Le scritture spostano ~3 MB da e verso Supabase: il limite di default
+// della funzione le troncava al primo tentativo.
+export const maxDuration = 60;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);

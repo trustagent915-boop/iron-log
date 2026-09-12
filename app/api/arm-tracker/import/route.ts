@@ -6,6 +6,9 @@ import { createEmptyArmTrackerData, getDataCounts } from "@/lib/arm-tracker/stor
 import type { ArmTrackerArchive, ArmTrackerData } from "@/lib/arm-tracker/types";
 
 export const dynamic = "force-dynamic";
+// Le scritture spostano ~3 MB da e verso Supabase: il limite di default
+// della funzione le troncava al primo tentativo.
+export const maxDuration = 60;
 
 const maxArchivePayloadBytes = 15_000_000;
 
