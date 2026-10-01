@@ -67,6 +67,7 @@ const alwaysReady: ArmTrackerSyncStatus = {
 interface ArmTrackerContextValue {
   data: ArmTrackerData;
   isReady: boolean;
+  cloudReachable: boolean;
   syncStatus: ArmTrackerSyncStatus;
   activePlan: ReturnType<typeof getActivePlan>;
   refresh: () => void;
@@ -115,6 +116,9 @@ async function pushSnapshotBestEffort(snapshot: ArmTrackerData, seedVersion: str
 export function ArmTrackerProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<ArmTrackerData>(createEmptyArmTrackerData());
   const [isReady, setIsReady] = useState(false);
+  // false quando il cloud non ha risposto dopo tutti i tentativi: quello che
+  // si vede e solo la copia salvata sul dispositivo (anche vuota).
+  const [cloudReachable, setCloudReachable] = useState(true);
   const seedVersionRef = useRef<string | null>(null);
 
   const applySnapshot = useCallback((snapshot: ArmTrackerData) => {
@@ -157,6 +161,7 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
           ) {
             void pushSnapshotBestEffort(merged, seedVersionRef.current);
           }
+          setCloudReachable(true);
           setIsReady(true);
           return;
         } catch {
@@ -169,6 +174,7 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
       // instead of on a blocking scarecrow).
       if (!cancelled) {
         setData(db.getSnapshot());
+        setCloudReachable(false);
         setIsReady(true);
       }
     }
@@ -276,6 +282,7 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
       value={{
         data,
         isReady,
+        cloudReachable,
         syncStatus: alwaysReady,
         activePlan: getActivePlan(data),
         refresh,

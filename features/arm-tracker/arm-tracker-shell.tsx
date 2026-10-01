@@ -78,7 +78,7 @@ function getPageTitle(pathname: string, fallback: string) {
 
 export function ArmTrackerShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const { data, activePlan } = useArmTracker();
+  const { data, activePlan, cloudReachable, isReady } = useArmTracker();
   const planSessions = activePlan ? getPlanSessions(data, activePlan.id) : [];
   const completedSessions = planSessions.filter((session) => session.status === "completed").length;
   const historyCount = getHistoryEntries(data).length;
@@ -218,6 +218,21 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
         </header>
 
         <main className="mx-auto w-full max-w-[1400px] px-4 py-5 md:px-6 md:py-7">
+          {isReady && !cloudReachable ? (
+            <div
+              role="status"
+              className="mb-4 flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-4 sm:flex-row sm:items-center sm:justify-between"
+            >
+              <p className="text-sm leading-6 text-foreground">
+                <span className="font-semibold">Il database non risponde.</span> Vedi solo quello che
+                e salvato su questo dispositivo, che puo essere vuoto o vecchio. I tuoi dati non sono
+                persi: non importare e non ricreare nulla, riprova tra poco.
+              </p>
+              <Button type="button" size="sm" variant="outline" onClick={() => window.location.reload()}>
+                Riprova
+              </Button>
+            </div>
+          ) : null}
           {children}
         </main>
       </div>

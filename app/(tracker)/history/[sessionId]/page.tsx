@@ -9,6 +9,7 @@ import { useState } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { isSessionMarkerExerciseName } from "@/lib/arm-tracker/dashboard-config";
 import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { StatusBadge } from "@/features/arm-tracker/status-badge";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
@@ -196,6 +197,28 @@ export default function HistoryDetailPage() {
                 exerciseLog.actualWeight !== null
                   ? exerciseLog.actualWeight - plannedWeight
                   : null;
+
+              // Seduta di braccio di ferro: niente confronto previsto/eseguito,
+              // solo durata e note.
+              if (isSessionMarkerExerciseName(exercise.exerciseName)) {
+                const minutes =
+                  exerciseLog?.actualSeconds != null ? Math.round(exerciseLog.actualSeconds / 60) : null;
+                const markerNotes = (exerciseLog?.notes ?? "").replace("[[skipped]]", "").trim();
+
+                return (
+                  <Card key={exercise.id}>
+                    <CardContent className="space-y-2 p-6 pt-6 sm:p-7 sm:pt-7">
+                      <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">Durata</p>
+                      <p className="font-mono text-2xl font-semibold text-foreground">
+                        {minutes !== null ? `${minutes} min` : "Non segnata"}
+                      </p>
+                      {markerNotes ? (
+                        <p className="text-sm leading-6 text-muted-foreground">{markerNotes}</p>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+                );
+              }
 
               return (
                 <Card key={exercise.id}>
