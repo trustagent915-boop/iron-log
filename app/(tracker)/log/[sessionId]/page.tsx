@@ -12,6 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { StatusBadge } from "@/features/arm-tracker/status-badge";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
+import { isSessionMarkerExerciseName } from "@/lib/arm-tracker/dashboard-config";
 import {
   getIsometryCompletion,
   isometryStatusLabels,
@@ -133,7 +134,15 @@ export default function LogWorkoutPage() {
           actualSets: toFieldValue(existingExerciseLog?.actualSets ?? null),
           actualReps: toFieldValue(existingExerciseLog?.actualReps ?? null),
           actualWeight: toFieldValue(existingExerciseLog?.actualWeight ?? null),
-          actualSeconds: toFieldValue(existingExerciseLog?.actualSeconds ?? null),
+          // Per la seduta di braccio di ferro il campo contiene i MINUTI di
+          // durata (nel log restano secondi): e l unico numero che serve.
+          actualSeconds: isSessionMarkerExerciseName(exercise.exerciseName)
+            ? toFieldValue(
+                existingExerciseLog?.actualSeconds != null
+                  ? Math.round(existingExerciseLog.actualSeconds / 60)
+                  : null
+              )
+            : toFieldValue(existingExerciseLog?.actualSeconds ?? null),
           actualHoldTotalSeconds: toFieldValue(existingExerciseLog?.actualHoldTotalSeconds ?? null),
           notes: stripSkippedToken(existingExerciseLog?.notes ?? null) ?? "",
           skipped: existingExerciseLog ? isSkippedExerciseLog(existingExerciseLog) : false
@@ -187,6 +196,24 @@ export default function LogWorkoutPage() {
         exercises: sessionDetails.exercises.map((exercise) => {
           const draft = drafts[exercise.id];
 
+          if (isSessionMarkerExerciseName(exercise.exerciseName)) {
+            const minutes = parseInputNumber(draft?.actualSeconds ?? "");
+
+            return {
+              planExerciseId: exercise.id,
+              exerciseNameSnapshot: exercise.exerciseName,
+              // Una seduta fatta: basta questo perche risulti completata anche
+              // senza durata.
+              actualSets: 1,
+              actualReps: null,
+              actualWeight: null,
+              actualSeconds: minutes !== null && minutes > 0 ? Math.round(minutes * 60) : null,
+              actualHoldTotalSeconds: null,
+              notes: draft?.notes ?? "",
+              skipped: false
+            };
+          }
+
           return {
             planExerciseId: exercise.id,
             exerciseNameSnapshot: draft?.exerciseName ?? exercise.exerciseName,
@@ -207,6 +234,105 @@ export default function LogWorkoutPage() {
     } finally {
       setIsSaving(false);
     }
+  }
+
+  // Seduta di braccio di ferro / sparring: non ha set, ripetizioni, pesi ne
+  // isometrie da compilare. Una sola scheda: data, durata, note.
+  const isMarkerSession =
+    sessionDetails.exercises.length > 0 &&
+    sessionDetails.exercises.every((exercise) => isSessionMarkerExerciseName(exercise.exerciseName));
+
+  if (isMarkerSession) {
+    return (
+      <div className="page-enter space-y-6">
+        <PageHeader
+          eyebrow="Braccio di ferro"
+          title={sessionDetails.session.dayLabel ?? "Allenamento braccio di ferro"}
+          description={`Seduta del ${formatDateLabel(sessionDetails.session.sessionDate)}: segna quanto e durata e com e andata.`}
+          actions={<StatusBadge status={sessionDetails.session.status} />}
+        />
+
+        <Card>
+          <CardContent className="grid gap-4 p-6 pt-6 sm:p-7 sm:pt-7 md:grid-cols-[200px_160px_1fr]">
+            <div className="space-y-2">
+              <label htmlFor="performed-date" className="text-sm font-medium text-foreground">
+                Data
+              </label>
+              <Input
+                id="performed-date"
+                name="performed-date"
+                type="date"
+                value={performedDate}
+                onChange={(event) => setPerformedDate(event.target.value)}
+              />
+            </div>
+            {sessionDetails.exercises.map((exercise) => {
+              const draft = drafts[exercise.id];
+
+              return (
+                <div key={exercise.id} className="contents">
+                  <div className="space-y-2">
+                    <label
+                      htmlFor={`marker-minutes-${exercise.id}`}
+                      className="text-sm font-medium text-foreground"
+                    >
+                      Durata (minuti)
+                    </label>
+                    <Input
+                      id={`marker-minutes-${exercise.id}`}
+                      name={`marker-minutes-${exercise.id}`}
+                      inputMode="decimal"
+                      value={draft?.actualSeconds ?? ""}
+                      onChange={(event) => updateDraft(exercise.id, { actualSeconds: event.target.value })}
+                      placeholder="es. 90"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label
+                      htmlFor={`marker-notes-${exercise.id}`}
+                      className="text-sm font-medium text-foreground"
+                    >
+                      Note
+                    </label>
+                    <Textarea
+                      id={`marker-notes-${exercise.id}`}
+                      name={`marker-notes-${exercise.id}`}
+                      value={draft?.notes ?? ""}
+                      onChange={(event) => updateDraft(exercise.id, { notes: event.target.value })}
+                      placeholder="Sparring, tecnica, con chi, sensazioni."
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+
+        {errorMessage ? (
+          <Card>
+            <CardContent className="p-6 text-sm text-destructive">{errorMessage}</CardContent>
+          </Card>
+        ) : null}
+
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={handleSubmit} disabled={isSaving || !performedDate}>
+            {isSaving ? "Salvataggio..." : "Salva seduta"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() =>
+              router.push(
+                (sessionDetails.session.status === "planned"
+                  ? "/program"
+                  : `/history/${sessionDetails.session.id}`) as Route
+              )
+            }
+          >
+            Annulla
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
