@@ -225,8 +225,8 @@ export function ArmTrackerShell({ children }: { children: ReactNode }) {
             >
               <p className="text-sm leading-6 text-foreground">
                 <span className="font-semibold">Il database non risponde.</span> Vedi solo quello che
-                e salvato su questo dispositivo, che puo essere vuoto o vecchio. I tuoi dati non sono
-                persi: non importare e non ricreare nulla, riprova tra poco.
+                e salvato su questo dispositivo, che puo essere vuoto o vecchio. Non importare e non
+              ricreare nulla finche non torna: riprova tra poco.
               </p>
               <Button type="button" size="sm" variant="outline" onClick={() => window.location.reload()}>
                 Riprova
