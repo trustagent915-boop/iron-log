@@ -372,6 +372,19 @@ export function saveWorkoutLogEntry(input: SaveWorkoutLogInput) {
   const exerciseInputMap = new Map(input.exercises.map((exercise) => [exercise.planExerciseId, exercise]));
   const submittedAt = new Date().toISOString();
   const workoutLogId = latestLog?.id ?? crypto.randomUUID();
+  // Ri-salvare una seduta deve SOSTITUIRE le righe, non affiancarne di nuove.
+  // Con id casuali a ogni salvataggio il merge col cloud (che unisce per id e
+  // non perde mai nulla) riportava indietro le righe vecchie: ogni esercizio
+  // compariva due volte. Riusando l id della riga precedente il merge la
+  // sovrascrive; le righe che non hanno piu un corrispondente vanno nei
+  // tombstone, cosi spariscono anche dal cloud.
+  const previousExerciseLogs = snapshot.exerciseLogs.filter((exerciseLog) =>
+    existingLogsForSession.some((log) => log.id === exerciseLog.workoutLogId)
+  );
+  const previousIdByPlanExercise = new Map<string, string>();
+  previousExerciseLogs.forEach((exerciseLog) => {
+    previousIdByPlanExercise.set(exerciseLog.planExerciseId, exerciseLog.id);
+  });
 
   const workoutLogExerciseEntries: WorkoutExerciseLog[] = planExercises.map((planExercise, index) => {
     const submittedExercise = exerciseInputMap.get(planExercise.id);
@@ -387,7 +400,7 @@ export function saveWorkoutLogEntry(input: SaveWorkoutLogInput) {
     const actualSets = skipped || (explicitSets === null && actualReps === null && actualWeight === null) ? explicitSets : explicitSets ?? planExercise.plannedSets ?? null;
 
     return {
-      id: crypto.randomUUID(),
+      id: previousIdByPlanExercise.get(planExercise.id) ?? crypto.randomUUID(),
       workoutLogId,
       planExerciseId: planExercise.id,
       exerciseNameSnapshot,
@@ -423,11 +436,24 @@ export function saveWorkoutLogEntry(input: SaveWorkoutLogInput) {
   const retainedExerciseLogs = snapshot.exerciseLogs.filter((exerciseLog) => !existingLogsForSession.some((log) => log.id === exerciseLog.workoutLogId));
   const updatedSessions: PlanSession[] = snapshot.sessions.map((item) => (item.id === session.id ? { ...item, status: completionStatus } : item));
 
+  const keptExerciseLogIds = new Set(workoutLogExerciseEntries.map((exerciseLog) => exerciseLog.id));
+  const supersededExerciseLogIds = previousExerciseLogs
+    .map((exerciseLog) => exerciseLog.id)
+    .filter((id) => !keptExerciseLogIds.has(id));
+  const supersededWorkoutLogIds = existingLogsForSession
+    .map((log) => log.id)
+    .filter((id) => id !== workoutLogId);
+
   db.setSnapshot({
     ...snapshot,
     sessions: updatedSessions,
     workoutLogs: [...retainedWorkoutLogs, workoutLog],
-    exerciseLogs: [...retainedExerciseLogs, ...workoutLogExerciseEntries]
+    exerciseLogs: [...retainedExerciseLogs, ...workoutLogExerciseEntries],
+    deletedIds: {
+      ...snapshot.deletedIds,
+      workoutLogs: [...snapshot.deletedIds.workoutLogs, ...supersededWorkoutLogIds],
+      exerciseLogs: [...snapshot.deletedIds.exerciseLogs, ...supersededExerciseLogIds]
+    }
   });
 
   return { workoutLog, exerciseLogs: workoutLogExerciseEntries, completionStatus };
