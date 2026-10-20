@@ -86,9 +86,24 @@ export function normalizeDashboardConfig(raw: unknown): DashboardConfig {
   return { pinned, hidden, order, updatedAt };
 }
 
-/** Marcatori di seduta (es. la sessione di braccio di ferro): non sono esercizi da livello. */
+export type SessionMarkerKind = "armwrestling" | "start";
+
+/** Nome dell esercizio che rappresenta una sessione di partenze (Ready Go). */
+export const startSessionExerciseName = "Allenamento partenze (Ready Go)";
+
+/**
+ * Marcatori di seduta: una sessione intera registrata come voce singola
+ * (durata e note), non un esercizio da livello. Due tipi: lo sparring di
+ * braccio di ferro e le sessioni di partenze sul "Ready Go".
+ */
+export function getSessionMarkerKind(name: string): SessionMarkerKind | null {
+  if (/allenamento\s+braccio\s+di\s+ferro/i.test(name)) return "armwrestling";
+  if (/allenamento\s+partenz|ready\s*go/i.test(name)) return "start";
+  return null;
+}
+
 export function isSessionMarkerExerciseName(name: string) {
-  return /allenamento\s+braccio\s+di\s+ferro/i.test(name);
+  return getSessionMarkerKind(name) !== null;
 }
 
 /**

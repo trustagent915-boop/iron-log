@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createEmptyDashboardConfig,
+  getSessionMarkerKind,
   hideExercise,
   isSessionMarkerExerciseName,
   migrateWatchlistToDashboardConfig,
@@ -95,4 +96,19 @@ test("an untouched empty config never overrides a real one, in either merge orde
   // Una modifica reale piu recente vince anche se svuota tutto (unpin di tutto).
   const cleared = touchDashboardConfig(unpinExercise(real, "Stacco da terra"), "2030-01-01T00:00:00.000Z");
   assert.deepEqual(pickNewerDashboardConfig(real, cleared).pinned, []);
+});
+
+test("start sessions are session markers, kept apart from armwrestling and from real exercises", () => {
+  assert.equal(getSessionMarkerKind("Allenamento braccio di ferro"), "armwrestling");
+  assert.equal(getSessionMarkerKind("Allenamento partenze (Ready Go)"), "start");
+  assert.equal(getSessionMarkerKind("Ready Go"), "start");
+  assert.equal(getSessionMarkerKind("Side Pressure"), null);
+  assert.equal(isSessionMarkerExerciseName("Allenamento partenze (Ready Go)"), true);
+
+  const sections = resolveDashboardSections(createEmptyDashboardConfig(), [
+    "Side Pressure",
+    "Allenamento partenze (Ready Go)",
+    "Allenamento braccio di ferro"
+  ]);
+  assert.deepEqual(sections.programma, ["Side Pressure"]);
 });
