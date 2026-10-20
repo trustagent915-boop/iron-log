@@ -2,6 +2,7 @@ import {
   createEmptyArmTrackerData,
   mergeArmTrackerSnapshots,
   normalizeArmTrackerSnapshot,
+  protectProgrammeFromFullSnapshot,
   stableSerializeArmTrackerData
 } from "@/lib/arm-tracker/storage";
 import type { ArmTrackerData } from "@/lib/arm-tracker/types";
@@ -81,7 +82,9 @@ function hasSnapshotData(snapshot: ArmTrackerData) {
 }
 
 function mergeSnapshotsForZeroLoss(current: ArmTrackerData, incoming: ArmTrackerData): ArmTrackerData {
-  return mergeArmTrackerSnapshots(current, incoming);
+  // Un client vecchio invia lo snapshot intero: non deve riscrivere il
+  // programma del cloud con la sua copia, forse superata.
+  return mergeArmTrackerSnapshots(current, protectProgrammeFromFullSnapshot(current, incoming));
 }
 
 async function insertSnapshotVersion(

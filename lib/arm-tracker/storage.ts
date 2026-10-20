@@ -765,6 +765,115 @@ export function stableSerializeArmTrackerData(snapshot: ArmTrackerData): string 
   return JSON.stringify(sortKeysDeep(snapshot));
 }
 
+/**
+ * Solo quello che e cambiato tra due stati dello stesso dispositivo: entita
+ * nuove o modificate e tombstone nuovi. Il client invia questo, non l'intero
+ * snapshot: il server unisce per id e da ragione a chi arriva, quindi un
+ * dispositivo rimasto aperto con una copia vecchia del programma, inviando
+ * tutto, annullava le modifiche fatte nel frattempo da altri (20 ott 2026).
+ */
+export function diffArmTrackerSnapshots(before: ArmTrackerData, after: ArmTrackerData): ArmTrackerData {
+  const previous = normalizeSnapshot(before);
+  const next = normalizeSnapshot(after);
+  const changed = <T extends { id: string }>(prevItems: T[], nextItems: T[]) => {
+    const prevMap = new Map(prevItems.map((item) => [item.id, JSON.stringify(sortKeysDeep(item))]));
+    return nextItems.filter((item) => prevMap.get(item.id) !== JSON.stringify(sortKeysDeep(item)));
+  };
+  const newIds = (prevIds: string[], nextIds: string[]) => {
+    const seen = new Set(prevIds);
+    return nextIds.filter((id) => !seen.has(id));
+  };
+
+  return {
+    plans: changed(previous.plans, next.plans),
+    sessions: changed(previous.sessions, next.sessions),
+    exercises: changed(previous.exercises, next.exercises),
+    workoutLogs: changed(previous.workoutLogs, next.workoutLogs),
+    exerciseLogs: changed(previous.exerciseLogs, next.exerciseLogs),
+    importRuns: changed(previous.importRuns, next.importRuns),
+    // Il server tiene la watchlist attuale quando arriva vuota.
+    level100Watchlist:
+      JSON.stringify(previous.level100Watchlist) === JSON.stringify(next.level100Watchlist)
+        ? []
+        : next.level100Watchlist,
+    // Hanno updatedAt: nel merge vince comunque la piu recente.
+    isometryTargets: next.isometryTargets,
+    dashboardConfig: next.dashboardConfig,
+    deletedIds: {
+      plans: newIds(previous.deletedIds.plans, next.deletedIds.plans),
+      sessions: newIds(previous.deletedIds.sessions, next.deletedIds.sessions),
+      exercises: newIds(previous.deletedIds.exercises, next.deletedIds.exercises),
+      workoutLogs: newIds(previous.deletedIds.workoutLogs, next.deletedIds.workoutLogs),
+      exerciseLogs: newIds(previous.deletedIds.exerciseLogs, next.deletedIds.exerciseLogs),
+      importRuns: newIds(previous.deletedIds.importRuns, next.deletedIds.importRuns)
+    }
+  };
+}
+
+/**
+ * Un payload con cosi tanti esercizi e l'intero snapshot di un client vecchio
+ * (prima del 20 ott 2026 si inviava tutto), non un diff.
+ */
+export const fullSnapshotExerciseThreshold = 1000;
+
+/**
+ * Difesa lato server contro i client vecchi ancora aperti: se arriva uno
+ * snapshot intero, il programma gia presente nel cloud (piani, sedute,
+ * esercizi) non viene riscritto con la copia del dispositivo, che puo essere
+ * vecchia. Passano le entita nuove, tutti i log, e lo stato di una seduta
+ * quando il dispositivo l'ha registrata.
+ */
+export function protectProgrammeFromFullSnapshot(
+  current: ArmTrackerData,
+  incoming: ArmTrackerData
+): ArmTrackerData {
+  const normalizedIncoming = normalizeSnapshot(incoming);
+
+  if (normalizedIncoming.exercises.length < fullSnapshotExerciseThreshold) {
+    return normalizedIncoming;
+  }
+
+  const normalizedCurrent = normalizeSnapshot(current);
+  const onlyNew = <T extends { id: string }>(items: T[], existing: T[]) => {
+    const existingIds = new Set(existing.map((item) => item.id));
+    return items.filter((item) => !existingIds.has(item.id));
+  };
+  const currentSessions = new Map(normalizedCurrent.sessions.map((session) => [session.id, session]));
+
+  return {
+    ...normalizedIncoming,
+    plans: onlyNew(normalizedIncoming.plans, normalizedCurrent.plans),
+    exercises: onlyNew(normalizedIncoming.exercises, normalizedCurrent.exercises),
+    sessions: normalizedIncoming.sessions.flatMap((session) => {
+      const existing = currentSessions.get(session.id);
+      if (!existing) {
+        return [session];
+      }
+      // L'unica modifica che l'app fa a una seduta esistente: lo stato quando
+      // la registri. Tutto il resto lo tiene il cloud.
+      if (session.status !== "planned" && session.status !== existing.status) {
+        return [{ ...existing, status: session.status }];
+      }
+      return [];
+    })
+  };
+}
+
+/** true se il diff non porta nessuna entita e nessun tombstone. */
+export function isEmptyArmTrackerDiff(diff: ArmTrackerData) {
+  return (
+    diff.plans.length +
+      diff.sessions.length +
+      diff.exercises.length +
+      diff.workoutLogs.length +
+      diff.exerciseLogs.length +
+      diff.importRuns.length +
+      diff.level100Watchlist.length +
+      Object.values(diff.deletedIds).reduce((total, ids) => total + ids.length, 0) ===
+    0
+  );
+}
+
 export function createEmptyArmTrackerData(): ArmTrackerData {
   return {
     plans: [],

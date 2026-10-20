@@ -29,7 +29,9 @@ import {
   ARM_TRACKER_STORAGE_EVENT,
   createEmptyArmTrackerData,
   db,
+  diffArmTrackerSnapshots,
   exportArmTrackerArchive,
+  isEmptyArmTrackerDiff,
   mergeArmTrackerSnapshots,
   normalizeArmTrackerSnapshot,
   stableSerializeArmTrackerData
@@ -97,18 +99,22 @@ const ArmTrackerContext = createContext<ArmTrackerContextValue | null>(null);
 // this runs. Fire and forget. Retries once on transient failure so a
 // flaky mobile connection self-heals; no toast on eventual failure so
 // the interface stays clean. The next successful save will resync.
+// The payload is a DIFF (only what this device changed), never the whole
+// snapshot: see diffArmTrackerSnapshots. Returns the merged cloud snapshot
+// on success, null on failure.
 async function pushSnapshotBestEffort(snapshot: ArmTrackerData, seedVersion: string | null) {
   const attempt = async () => {
     return pushRemoteSnapshot({ snapshot, seedVersion });
   };
   try {
-    await attempt();
+    return (await attempt()).snapshot ?? null;
   } catch {
     try {
       await new Promise((resolve) => setTimeout(resolve, 1200));
-      await attempt();
+      return (await attempt()).snapshot ?? null;
     } catch {
       // swallowed — see comment above
+      return null;
     }
   }
 }
@@ -120,6 +126,9 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
   // si vede e solo la copia salvata sul dispositivo (anche vuota).
   const [cloudReachable, setCloudReachable] = useState(true);
   const seedVersionRef = useRef<string | null>(null);
+  // Cresce a ogni modifica locale: una risposta del cloud arrivata dopo una
+  // modifica piu recente non deve sovrascriverla.
+  const mutationCounterRef = useRef(0);
 
   const applySnapshot = useCallback((snapshot: ArmTrackerData) => {
     db.setSnapshot(snapshot);
@@ -155,11 +164,14 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
           // Confronto a chiavi ordinate contro il cloud normalizzato: jsonb
           // riordina le chiavi e un JSON.stringify diretto risultava sempre
           // diverso, con una riscrittura da 3 MB a ogni apertura di pagina.
-          if (
-            stableSerializeArmTrackerData(merged) !==
-            stableSerializeArmTrackerData(normalizeArmTrackerSnapshot(cloudSnapshot))
-          ) {
-            void pushSnapshotBestEffort(merged, seedVersionRef.current);
+          // Si invia solo cio che il dispositivo ha in piu del cloud (per
+          // esempio un salvataggio fatto offline), mai l'intero snapshot.
+          const normalizedCloud = normalizeArmTrackerSnapshot(cloudSnapshot);
+          if (stableSerializeArmTrackerData(merged) !== stableSerializeArmTrackerData(normalizedCloud)) {
+            const diff = diffArmTrackerSnapshots(normalizedCloud, merged);
+            if (!isEmptyArmTrackerDiff(diff)) {
+              void pushSnapshotBestEffort(diff, seedVersionRef.current);
+            }
           }
           setCloudReachable(true);
           setIsReady(true);
@@ -185,13 +197,27 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
       setData(db.getSnapshot());
     }
 
+    // L'app lasciata aperta sul telefono resta indietro: quando torna in
+    // primo piano riscarica il cloud, cosi non si registra su un programma
+    // vecchio.
+    let refreshing = false;
+    function handleVisibility() {
+      if (document.visibilityState !== "visible" || refreshing) return;
+      refreshing = true;
+      void loadFromCloud().finally(() => {
+        refreshing = false;
+      });
+    }
+
     window.addEventListener(ARM_TRACKER_STORAGE_EVENT, handleStorageSync);
     window.addEventListener("storage", handleStorageSync);
+    document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
       cancelled = true;
       window.removeEventListener(ARM_TRACKER_STORAGE_EVENT, handleStorageSync);
       window.removeEventListener("storage", handleStorageSync);
+      document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, [applySnapshot]);
 
@@ -204,10 +230,22 @@ export function ArmTrackerProvider({ children }: { children: ReactNode }) {
   // the cloud push errors, the state stays as-is locally and the next
   // successful save resyncs.
   async function commitMutation<T>(mutation: () => T): Promise<T> {
+    // Copia profonda: alcune mutazioni potrebbero toccare gli oggetti in
+    // memoria, e serve lo stato di prima per sapere cosa e cambiato.
+    const before = structuredClone(db.getSnapshot());
     const result = mutation();
     const nextSnapshot = db.getSnapshot();
     setData(nextSnapshot);
-    void pushSnapshotBestEffort(nextSnapshot, seedVersionRef.current ?? db.getSeedVersion());
+    mutationCounterRef.current += 1;
+    const mutationId = mutationCounterRef.current;
+    const diff = diffArmTrackerSnapshots(before, nextSnapshot);
+    void pushSnapshotBestEffort(diff, seedVersionRef.current ?? db.getSeedVersion()).then((cloud) => {
+      // Il server risponde con lo stato unito: lo si adotta (vince il cloud)
+      // solo se nel frattempo non e arrivata un'altra modifica locale.
+      if (cloud && mutationId === mutationCounterRef.current) {
+        applySnapshot(mergeArmTrackerSnapshots(db.getSnapshot(), cloud));
+      }
+    });
     return result;
   }
 
