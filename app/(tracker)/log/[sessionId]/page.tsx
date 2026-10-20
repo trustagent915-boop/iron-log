@@ -732,7 +732,7 @@ export default function LogWorkoutPage() {
                     // esercizio, così ce l'hai sott'occhio mentre registri.
                     placeholder={
                       isStartDrill
-                        ? "Reazione in ms: dx ... / sx ... Partenze bruciate: ..."
+                        ? "Sensazioni: velocita, mano piu lenta, partenze bruciate."
                         : personalRecordLabel ??
                       "Tecnica, buffer, sensazioni o eventuali modifiche sul momento."
                     }
