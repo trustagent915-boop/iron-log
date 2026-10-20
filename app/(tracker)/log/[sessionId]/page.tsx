@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { StatusBadge } from "@/features/arm-tracker/status-badge";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
-import { isSessionMarkerExerciseName } from "@/lib/arm-tracker/dashboard-config";
+import { getSessionMarkerKind, isSessionMarkerExerciseName } from "@/lib/arm-tracker/dashboard-config";
 import {
   getIsometryCompletion,
   isometryStatusLabels,
@@ -243,11 +243,16 @@ export default function LogWorkoutPage() {
     sessionDetails.exercises.every((exercise) => isSessionMarkerExerciseName(exercise.exerciseName));
 
   if (isMarkerSession) {
+    const isStartSession = getSessionMarkerKind(sessionDetails.exercises[0].exerciseName) === "start";
+
     return (
       <div className="page-enter space-y-6">
         <PageHeader
-          eyebrow="Braccio di ferro"
-          title={sessionDetails.session.dayLabel ?? "Allenamento braccio di ferro"}
+          eyebrow={isStartSession ? "Partenze" : "Braccio di ferro"}
+          title={
+            sessionDetails.session.dayLabel ??
+            (isStartSession ? "Allenamento partenze (Ready Go)" : "Allenamento braccio di ferro")
+          }
           description={`Seduta del ${formatDateLabel(sessionDetails.session.sessionDate)}: segna quanto e durata e com e andata.`}
           actions={<StatusBadge status={sessionDetails.session.status} />}
         />
@@ -299,7 +304,11 @@ export default function LogWorkoutPage() {
                       name={`marker-notes-${exercise.id}`}
                       value={draft?.notes ?? ""}
                       onChange={(event) => updateDraft(exercise.id, { notes: event.target.value })}
-                      placeholder="Sparring, tecnica, con chi, sensazioni."
+                      placeholder={
+                        isStartSession
+                          ? "Serie fatte, mano, reazione sul GO, partenze bruciate."
+                          : "Sparring, tecnica, con chi, sensazioni."
+                      }
                     />
                   </div>
                 </div>

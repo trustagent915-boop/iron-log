@@ -11,6 +11,7 @@
  */
 import { getProgressionVerdict, type PerformanceSample } from "../lib/arm-tracker/progression.ts";
 import { isometryTotalTargetSeconds } from "../lib/arm-tracker/isometry-target.ts";
+import { isSessionMarkerExerciseName } from "../lib/arm-tracker/dashboard-config.ts";
 
 const API = "https://iron-log-deploy.vercel.app/api/arm-tracker/snapshot";
 
@@ -74,6 +75,7 @@ for (const sessione of prossime) {
     .sort((a: any, b: any) => a.sortOrder - b.sortOrder);
 
   for (const ex of esercizi) {
+    if (isSessionMarkerExerciseName(ex.exerciseName)) continue;
     const history = storico.get(normalize(ex.exerciseName)) ?? [];
     const verdetto = getProgressionVerdict({
       exerciseName: ex.exerciseName,

@@ -269,7 +269,10 @@ function splitLegacyIsometrySeconds(
     return { actualSeconds, actualHoldTotalSeconds: asNullableNumber(raw.actualHoldTotalSeconds) };
   }
 
-  if (actualSeconds === null || /allenamento\s+braccio\s+di\s+ferro/i.test(exerciseName)) {
+  if (
+    actualSeconds === null ||
+    /allenamento\s+braccio\s+di\s+ferro|allenamento\s+partenz|ready\s*go/i.test(exerciseName)
+  ) {
     return { actualSeconds, actualHoldTotalSeconds: null };
   }
 
