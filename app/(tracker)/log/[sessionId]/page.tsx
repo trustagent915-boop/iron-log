@@ -257,6 +257,26 @@ export default function LogWorkoutPage() {
           actions={<StatusBadge status={sessionDetails.session.status} />}
         />
 
+        {sessionDetails.exercises.some((exercise) => exercise.plannedNotes) ? (
+          <Card>
+            <CardContent className="space-y-2 p-6 pt-6 sm:p-7 sm:pt-7">
+              <p className="text-xs uppercase tracking-[0.18em] text-muted-foreground">
+                {isStartSession ? "Protocollo della seduta" : "Indicazioni"}
+              </p>
+              {sessionDetails.exercises
+                .filter((exercise) => exercise.plannedNotes)
+                .map((exercise) => (
+                  <p
+                    key={exercise.id}
+                    className="max-w-3xl whitespace-pre-line text-sm leading-7 text-foreground"
+                  >
+                    {exercise.plannedNotes}
+                  </p>
+                ))}
+            </CardContent>
+          </Card>
+        ) : null}
+
         <Card>
           <CardContent className="grid gap-4 p-6 pt-6 sm:p-7 sm:pt-7 md:grid-cols-[200px_160px_1fr]">
             <div className="space-y-2">
