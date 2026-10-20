@@ -522,7 +522,12 @@ test("assisted one-arm work is kept apart from the real one-arm pull up", () => 
 });
 
 test("start drills never produce a level in kg", () => {
-  for (const name of ["Partenza reazione", "Partenza esplosiva", "Partenza contro resistenza", "Partenza in posizione di gara"]) {
+  for (const name of [
+    "Partenza in gancio",
+    "Partenza in top roll",
+    "Partenza test velocita",
+    "Partenza in gancio (maniglia wrist curl)"
+  ]) {
     assert.equal(getLevel100ExerciseRule(name).id, "conditioning", name);
   }
 });

@@ -509,7 +509,6 @@ export default function LogWorkoutPage() {
                         updateDraft(exercise.id, { actualReps: String(exercise.plannedReps) })
                       }
                     />
-                    {isStartDrill ? null : (
                     <PlannedChip
                       label={isCustomWorkout ? "Peso target" : "Peso previsto"}
                       value={exercise.plannedWeight}
@@ -519,7 +518,6 @@ export default function LogWorkoutPage() {
                         updateDraft(exercise.id, { actualWeight: String(exercise.plannedWeight) })
                       }
                     />
-                    )}
                     {isStartDrill ? null : (
                     <span className="rounded-full bg-secondary px-3 py-1 text-secondary-foreground">
                       Target iso: {isoTarget.volumeTargetSeconds}s
@@ -626,8 +624,6 @@ export default function LogWorkoutPage() {
                       disabled={draft.skipped}
                     />
                   </div>
-                  {isStartDrill ? null : (
-                  <>
                   <div className="space-y-2">
                     <label
                       htmlFor={`actual-weight-${exercise.id}`}
@@ -646,6 +642,8 @@ export default function LogWorkoutPage() {
                       disabled={draft.skipped}
                     />
                   </div>
+                  {isStartDrill ? null : (
+                  <>
                                       <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <label
