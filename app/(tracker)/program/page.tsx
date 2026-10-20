@@ -16,14 +16,68 @@ import { Select } from "@/components/ui/select";
 import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { StatusBadge } from "@/features/arm-tracker/status-badge";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
+import { isSessionMarkerExerciseName } from "@/lib/arm-tracker/dashboard-config";
 import {
   formatDateLabel,
   formatExercisePrescription,
+  formatExerciseResult,
+  getLatestExerciseLogsBySession,
   getCustomSessionsWithExercises,
   getPlanSessionsWithExercises,
   groupSessionsByWeek
 } from "@/lib/arm-tracker/selectors";
-import type { SessionStatus, SessionWithExercises } from "@/lib/arm-tracker/types";
+import type {
+  PlanExercise,
+  SessionStatus,
+  SessionWithExercises,
+  WorkoutExerciseLog
+} from "@/lib/arm-tracker/types";
+
+// Riga dell anteprima: per una seduta gia registrata mostra quello che hai
+// fatto davvero (lo stesso dato del dettaglio) e la prescrizione in piccolo.
+function ExercisePreviewLine({
+  exercise,
+  exerciseLog,
+  isLogged,
+  className
+}: {
+  exercise: PlanExercise;
+  exerciseLog: WorkoutExerciseLog | undefined;
+  isLogged: boolean;
+  className: string;
+}) {
+  const prescription = formatExercisePrescription(exercise) || "Nessun target definito";
+
+  if (!isLogged) {
+    return <p className={className}>{prescription}</p>;
+  }
+
+  let result = "Non registrato";
+  if (exerciseLog) {
+    if (isSessionMarkerExerciseName(exercise.exerciseName)) {
+      result =
+        exerciseLog.actualSeconds != null
+          ? `Durata ${Math.round(exerciseLog.actualSeconds / 60)} min`
+          : "Fatto";
+    } else {
+      result = formatExerciseResult(exerciseLog);
+    }
+  }
+
+  const showPrescription =
+    !isSessionMarkerExerciseName(exercise.exerciseName) && prescription !== exercise.plannedNotes;
+
+  return (
+    <>
+      <p className={className}>
+        <span className="font-medium text-foreground">Fatto:</span> {result}
+      </p>
+      {showPrescription ? (
+        <p className="text-[11px] text-muted-foreground/70">Previsto: {prescription}</p>
+      ) : null}
+    </>
+  );
+}
 
 // Un allenamento è "fatto" se completato o saltato. I fatti vanno in fondo,
 // quelli ancora da fare restano in cima ordinati per data, così il prossimo
@@ -65,6 +119,7 @@ export default function ProgramPage() {
   const [openWeeks, setOpenWeeks] = useState<Record<string, boolean>>({});
   const [openSessions, setOpenSessions] = useState<Record<string, boolean>>({});
   const [didAutoOpenWeek, setDidAutoOpenWeek] = useState(false);
+  const loggedBySession = getLatestExerciseLogsBySession(data);
 
   function toggleWeek(weekKey: string) {
     setOpenWeeks((current) => ({ ...current, [weekKey]: !(current[weekKey] ?? false) }));
@@ -421,9 +476,12 @@ export default function ProgramPage() {
                     {session.exercises.map((exercise) => (
                       <div key={exercise.id} className="list-row">
                         <p className="font-medium text-foreground">{exercise.exerciseName}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          {formatExercisePrescription(exercise) || "Nessun target definito"}
-                        </p>
+                        <ExercisePreviewLine
+                          exercise={exercise}
+                          exerciseLog={loggedBySession.get(session.id)?.get(exercise.id)}
+                          isLogged={loggedBySession.has(session.id)}
+                          className="mt-1 text-sm text-muted-foreground"
+                        />
                         {exercise.plannedNotes ? (
                           <p className="mt-2 text-xs uppercase tracking-[0.18em] text-muted-foreground">
                             {exercise.plannedNotes}
@@ -547,9 +605,12 @@ export default function ProgramPage() {
                                 <p className="text-sm font-medium text-foreground">
                                   {exercise.exerciseName}
                                 </p>
-                                <p className="mt-0.5 text-xs text-muted-foreground">
-                                  {formatExercisePrescription(exercise) || "Nessun target definito"}
-                                </p>
+                                <ExercisePreviewLine
+                                  exercise={exercise}
+                                  exerciseLog={loggedBySession.get(session.id)?.get(exercise.id)}
+                                  isLogged={loggedBySession.has(session.id)}
+                                  className="mt-0.5 text-xs text-muted-foreground"
+                                />
                                 {exercise.plannedNotes ? (
                                   <p className="mt-1 text-[11px] text-muted-foreground/80">
                                     {exercise.plannedNotes}

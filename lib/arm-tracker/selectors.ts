@@ -651,6 +651,57 @@ export function formatExercisePrescription(exercise: PlanExercise) {
   return pieces.join(" ");
 }
 
+/**
+ * Per ogni seduta registrata, i log degli esercizi dell'ultima registrazione
+ * (la stessa che apre il dettaglio), indicizzati per esercizio del piano.
+ */
+export function getLatestExerciseLogsBySession(data: ArmTrackerData) {
+  const latestWorkout = new Map<string, WorkoutLog>();
+
+  for (const workoutLog of data.workoutLogs) {
+    const current = latestWorkout.get(workoutLog.planSessionId);
+
+    if (!current || workoutLog.createdAt.localeCompare(current.createdAt) >= 0) {
+      latestWorkout.set(workoutLog.planSessionId, workoutLog);
+    }
+  }
+
+  const sessionByWorkout = new Map<string, string>();
+  for (const [sessionId, workoutLog] of latestWorkout) {
+    sessionByWorkout.set(workoutLog.id, sessionId);
+  }
+
+  const result = new Map<string, Map<string, WorkoutExerciseLog>>();
+  for (const exerciseLog of data.exerciseLogs) {
+    const sessionId = sessionByWorkout.get(exerciseLog.workoutLogId);
+
+    if (!sessionId) {
+      continue;
+    }
+
+    const bySession = result.get(sessionId) ?? new Map<string, WorkoutExerciseLog>();
+    bySession.set(exerciseLog.planExerciseId, exerciseLog);
+    result.set(sessionId, bySession);
+  }
+
+  return result;
+}
+
+/** Quello che e stato fatto davvero, nello stesso formato della prescrizione. */
+export function formatExerciseResult(exerciseLog: WorkoutExerciseLog) {
+  if (isSkippedExerciseLog(exerciseLog)) {
+    return "Saltato";
+  }
+
+  const pieces = [
+    exerciseLog.actualSets !== null ? `${exerciseLog.actualSets}x${exerciseLog.actualReps ?? "-"}` : null,
+    exerciseLog.actualWeight !== null ? `@ ${formatCompactWeight(exerciseLog.actualWeight)}` : null,
+    exerciseLog.actualSeconds !== null ? `iso ${formatCompactNumber(exerciseLog.actualSeconds)}s` : null
+  ].filter(Boolean);
+
+  return pieces.join(" ") || "Registrato senza numeri";
+}
+
 export function getActivePlan(data: ArmTrackerData) {
   return data.plans.find((plan) => plan.status === "active") ?? null;
 }
