@@ -376,6 +376,12 @@ export function canonicalizeLevel100ExerciseName(rawName: string) {
 export function getLevel100ExerciseRule(exerciseName: string): Level100Rule {
   const normalized = normalizeExerciseKey(exerciseName);
 
+  // Esercizi di partenza: reazione e velocita, non chili. Prima di tutto, cosi
+  // "Partenza in gancio" o una maniglia da wrist curl non finiscono in braccia.
+  if (/^\s*partenza\b/.test(normalized)) {
+    return level100Rules.conditioning;
+  }
+
   if (includesAny(normalized, ["one arm pull up iso", "one arm hold", "oap iso"])) {
     return level100Rules.one_arm_isometry;
   }

@@ -12,7 +12,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { LoadingPanel } from "@/features/arm-tracker/loading-panel";
 import { StatusBadge } from "@/features/arm-tracker/status-badge";
 import { useArmTracker } from "@/features/arm-tracker/arm-tracker-provider";
-import { getSessionMarkerKind, isSessionMarkerExerciseName } from "@/lib/arm-tracker/dashboard-config";
+import {
+  getSessionMarkerKind,
+  isSessionMarkerExerciseName,
+  isStartDrillExerciseName
+} from "@/lib/arm-tracker/dashboard-config";
 import {
   getIsometryCompletion,
   isometryStatusLabels,
@@ -474,6 +478,8 @@ export default function LogWorkoutPage() {
             isoTarget.recordTargetSeconds !== null &&
             isoRecordSeconds !== null &&
             isoRecordSeconds >= isoTarget.recordTargetSeconds;
+          // Partenze: solo serie e ripetizioni per mano, niente peso e isometria.
+          const isStartDrill = isStartDrillExerciseName(exercise.exerciseName);
           const personalRecordLabel = getExercisePersonalRecordLabel(
             data,
             draft.exerciseName || exercise.exerciseName
@@ -495,7 +501,7 @@ export default function LogWorkoutPage() {
                       }
                     />
                     <PlannedChip
-                      label={isCustomWorkout ? "Reps target" : "Reps previste"}
+                      label={isStartDrill ? "Reps per mano" : isCustomWorkout ? "Reps target" : "Reps previste"}
                       value={exercise.plannedReps}
                       display={formatCompactNumber(exercise.plannedReps)}
                       disabled={draft.skipped}
@@ -512,10 +518,17 @@ export default function LogWorkoutPage() {
                         updateDraft(exercise.id, { actualWeight: String(exercise.plannedWeight) })
                       }
                     />
+                    {isStartDrill ? null : (
                     <span className="rounded-full bg-secondary px-3 py-1 text-secondary-foreground">
                       Target iso: {isoTarget.volumeTargetSeconds}s
                     </span>
+                    )}
                   </div>
+                  {exercise.plannedNotes ? (
+                    <p className="max-w-3xl whitespace-pre-line text-sm leading-6 text-muted-foreground">
+                      {exercise.plannedNotes}
+                    </p>
+                  ) : null}
                   {(exercise.plannedSets !== null ||
                     exercise.plannedReps !== null ||
                     exercise.plannedWeight !== null) &&
@@ -598,7 +611,7 @@ export default function LogWorkoutPage() {
                       htmlFor={`actual-reps-${exercise.id}`}
                       className="text-sm font-medium text-foreground"
                     >
-                      Reps effettive
+                      {isStartDrill ? "Reps per mano" : "Reps effettive"}
                     </label>
                     <Input
                       id={`actual-reps-${exercise.id}`}
@@ -629,6 +642,8 @@ export default function LogWorkoutPage() {
                       disabled={draft.skipped}
                     />
                   </div>
+                  {isStartDrill ? null : (
+                  <>
                                       <div className="space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <label
@@ -695,6 +710,8 @@ export default function LogWorkoutPage() {
                         placeholder={`somma delle tenute, target ${isoTarget.volumeTargetSeconds}s`}
                       />
                   </div>
+                  </>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label
@@ -714,7 +731,9 @@ export default function LogWorkoutPage() {
                     // Il placeholder mostra il record attuale per questo
                     // esercizio, così ce l'hai sott'occhio mentre registri.
                     placeholder={
-                      personalRecordLabel ??
+                      isStartDrill
+                        ? "Reazione in ms: dx ... / sx ... Partenze bruciate: ..."
+                        : personalRecordLabel ??
                       "Tecnica, buffer, sensazioni o eventuali modifiche sul momento."
                     }
                   />

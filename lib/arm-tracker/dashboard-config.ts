@@ -107,6 +107,15 @@ export function isSessionMarkerExerciseName(name: string) {
 }
 
 /**
+ * Esercizi delle sedute di partenza ("Partenza reazione", "Partenza
+ * esplosiva"...): si registrano con serie e ripetizioni per mano, ma non hanno
+ * peso, isometria o livello. Restano fuori dalla Dashboard.
+ */
+export function isStartDrillExerciseName(name: string) {
+  return /^\s*partenza\b/i.test(name);
+}
+
+/**
  * Migrazione dalla vecchia watchlist: cio che era in watchlist ma NON e nel
  * programma attivo diventa "principale" (era li apposta, non per il blocco
  * corrente). Il resto entra comunque dal programma.
@@ -179,7 +188,7 @@ export function resolveDashboardSections(
   config: DashboardConfig,
   programExerciseNames: readonly string[]
 ): DashboardSections {
-  const program = uniqueNames([...programExerciseNames]).filter((name) => !isSessionMarkerExerciseName(name));
+  const program = uniqueNames([...programExerciseNames]).filter((name) => !isSessionMarkerExerciseName(name) && !isStartDrillExerciseName(name));
   const principali = orderNames(config, config.pinned);
   const programma = program.filter(
     (name) => !includesName(config.pinned, name) && !includesName(config.hidden, name)
