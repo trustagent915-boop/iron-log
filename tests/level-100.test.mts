@@ -520,3 +520,9 @@ test("assisted one-arm work is kept apart from the real one-arm pull up", () => 
   assert.equal(canonicalizeLevel100ExerciseName("One Arm Pull Up Iso"), "One Arm Pull Up Iso");
   assert.equal(getLevel100ExerciseRule("One Arm Pull Up Iso").id, "one_arm_isometry");
 });
+
+test("start drills never produce a level in kg", () => {
+  for (const name of ["Partenza reazione", "Partenza esplosiva", "Partenza contro resistenza", "Partenza in posizione di gara"]) {
+    assert.equal(getLevel100ExerciseRule(name).id, "conditioning", name);
+  }
+});

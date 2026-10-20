@@ -433,7 +433,8 @@ export function getLevel100ExerciseRule(exerciseName: string): Level100Rule {
     return level100Rules.dynamic_skill;
   }
 
-  if (includesAny(normalized, ["fran", "double under", "run", "corsa", "metcon"])) {
+  // Esercizi di partenza: reazione e velocita, non chili.
+  if (includesAny(normalized, ["fran", "double under", "run", "corsa", "metcon", "partenza"])) {
     return level100Rules.conditioning;
   }
 

@@ -6,6 +6,7 @@ import {
   getSessionMarkerKind,
   hideExercise,
   isSessionMarkerExerciseName,
+  isStartDrillExerciseName,
   migrateWatchlistToDashboardConfig,
   moveExercise,
   normalizeDashboardConfig,
@@ -109,6 +110,22 @@ test("start sessions are session markers, kept apart from armwrestling and from 
     "Side Pressure",
     "Allenamento partenze (Ready Go)",
     "Allenamento braccio di ferro"
+  ]);
+  assert.deepEqual(sections.programma, ["Side Pressure"]);
+});
+
+test("start drills are logged like exercises but stay out of the dashboard", () => {
+  assert.equal(isStartDrillExerciseName("Partenza reazione"), true);
+  assert.equal(isStartDrillExerciseName("Partenza contro resistenza"), true);
+  assert.equal(isStartDrillExerciseName("Side Pressure"), false);
+  // Non sono marcatori: la seduta si registra con serie e ripetizioni.
+  assert.equal(getSessionMarkerKind("Partenza reazione"), null);
+  assert.equal(getSessionMarkerKind("Partenza in posizione di gara"), null);
+
+  const sections = resolveDashboardSections(createEmptyDashboardConfig(), [
+    "Side Pressure",
+    "Partenza reazione",
+    "Partenza esplosiva"
   ]);
   assert.deepEqual(sections.programma, ["Side Pressure"]);
 });
